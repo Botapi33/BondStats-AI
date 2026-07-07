@@ -1,222 +1,128 @@
-const SUPABASE_FUNCTION_URL =
-  "https://kiyuawmnmzffqlgvntbv.supabase.co/functions/v1/swift-api";
+ <!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="BondStats AI — professionelle Finanzanalyse im Dialog.">
+  <meta name="theme-color" content="#06110d">
 
-const form = document.querySelector("#chatForm");
-const promptInput = document.querySelector("#prompt");
-const messages = document.querySelector("#messages");
-const thinking = document.querySelector("#thinking");
-const sendBtn = document.querySelector("#sendBtn");
-const clearBtn = document.querySelector("#clearBtn");
-const engineStatusText = document.querySelector("#engineStatusText");
+  <title>BondStats AI</title>
 
-let busy = false;
+  <link rel="stylesheet" href="./styles.css">
+</head>
 
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+<body>
+  <div class="background-grid" aria-hidden="true"></div>
+  <div class="glow glow-left" aria-hidden="true"></div>
+  <div class="glow glow-right" aria-hidden="true"></div>
 
-function scrollToBottom() {
-  requestAnimationFrame(() => {
-    messages.scrollTop = messages.scrollHeight;
-  });
-}
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="BondStats AI Startseite">
+        <span class="brand-mark" aria-hidden="true">
+          <span class="brand-core"></span>
+        </span>
 
-function resizeInput() {
-  promptInput.style.height = "auto";
-  promptInput.style.height = `${Math.min(promptInput.scrollHeight, 180)}px`;
-}
+        <span class="brand-copy">
+          <strong>BondStats <em>AI</em></strong>
+          <small>Financial Intelligence</small>
+        </span>
+      </a>
 
-function setBusy(value) {
-  busy = Boolean(value);
-  sendBtn.disabled = busy;
-  promptInput.disabled = busy;
-  thinking.classList.toggle("hidden", !busy);
-}
+      <div class="engine-status" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="engineStatusText">Analysis Engine Online</span>
+      </div>
+    </header>
 
-function setStatus(text) {
-  if (engineStatusText) {
-    engineStatusText.textContent = text;
-  }
-}
-
-function addUserMessage(text) {
-  const article = document.createElement("article");
-  article.className = "message user-message";
-
-  article.innerHTML = `
-    <div class="message-bubble">
-      <span class="message-speaker">YOU</span>
-      <p>${escapeHTML(text)}</p>
-    </div>
-  `;
-
-  messages.appendChild(article);
-  scrollToBottom();
-}
-
-function addAssistantMessage(data) {
-  const article = document.createElement("article");
-  article.className = "message assistant-message";
-
-  const blocks = [
-    ["WHY IT MATTERS", data.why],
-    ["MECHANISM", data.mechanism],
-    ["COUNTERCASE", data.countercase],
-    ["CONFIDENCE", data.confidence],
-    ["WHAT WOULD CHANGE THE VIEW", data.change]
-  ];
-
-  article.innerHTML = `
-    <div class="assistant-avatar">AI</div>
-
-    <div class="message-bubble">
-      <span class="message-speaker">BONDSTATS AI</span>
-
-      <p>${escapeHTML(data.answer || "No answer returned.")}</p>
-
-      <div class="analysis-grid">
-        ${blocks.map(([title, content]) => `
-          <div class="analysis-block">
-            <strong>${escapeHTML(title)}</strong>
-            <p>${escapeHTML(content || "Not available.")}</p>
-          </div>
-        `).join("")}
+    <section class="hero">
+      <div class="hero-kicker">
+        <span class="kicker-line"></span>
+        INSTITUTIONAL THINKING
       </div>
 
-      <p class="disclaimer">
-        ${escapeHTML(data.disclaimer || "Educational financial information only.")}
+      <h1>
+        Understand the forces
+        <span>behind the market.</span>
+      </h1>
+
+      <p class="hero-text">
+        Ask about bonds, inflation, central banks, monetary policy,
+        macroeconomics, markets and financial risk.
       </p>
-    </div>
-  `;
 
-  messages.appendChild(article);
-  scrollToBottom();
-}
-
-function addErrorMessage(text) {
-  const article = document.createElement("article");
-  article.className = "message assistant-message";
-
-  article.innerHTML = `
-    <div class="assistant-avatar">AI</div>
-
-    <div class="message-bubble error-bubble">
-      <span class="message-speaker">ANALYSIS ERROR</span>
-      <p>${escapeHTML(text)}</p>
-    </div>
-  `;
-
-  messages.appendChild(article);
-  scrollToBottom();
-}
-
-async function askBondStatsAI(message) {
-  const controller = new AbortController();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, 45000);
-
-  try {
-    const response = await fetch(SUPABASE_FUNCTION_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({ message }),
-      signal: controller.signal
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.error || `Request failed: ${response.status}`);
-    }
-
-    return data;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function submitMessage() {
-  if (busy) return;
-
-  const message = promptInput.value.trim();
-
-  if (!message) {
-    promptInput.focus();
-    return;
-  }
-
-  addUserMessage(message);
-
-  promptInput.value = "";
-  resizeInput();
-
-  setBusy(true);
-  setStatus("Building Analysis");
-
-  try {
-    const data = await askBondStatsAI(message);
-
-    addAssistantMessage(data);
-    setStatus("Analysis Engine Online");
-  } catch (error) {
-    console.error(error);
-
-    if (error.name === "AbortError") {
-      addErrorMessage("The request timed out. Please try again.");
-    } else if (String(error.message).includes("401")) {
-      addErrorMessage("Supabase rejected the request. Disable JWT verification for this Edge Function or add the Supabase anon key.");
-    } else {
-      addErrorMessage("The analysis engine could not respond. Please check the Supabase function and secrets.");
-    }
-
-    setStatus("Engine Error");
-  } finally {
-    setBusy(false);
-    promptInput.focus();
-  }
-}
-
-form.addEventListener("submit", event => {
-  event.preventDefault();
-  submitMessage();
-});
-
-promptInput.addEventListener("keydown", event => {
-  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-    event.preventDefault();
-    submitMessage();
-  }
-});
-
-promptInput.addEventListener("input", resizeInput);
-
-clearBtn.addEventListener("click", () => {
-  messages.innerHTML = `
-    <article class="message assistant-message">
-      <div class="assistant-avatar">AI</div>
-
-      <div class="message-bubble">
-        <span class="message-speaker">BONDSTATS AI</span>
-        <p>New session ready. Ask a question about finance, markets, bonds, inflation, central banks or risk.</p>
+      <div class="signal-row" aria-label="Analysebereiche">
+        <span>MACRO</span>
+        <span>RATES</span>
+        <span>FIXED INCOME</span>
+        <span>RISK</span>
       </div>
-    </article>
-  `;
+    </section>
 
-  promptInput.value = "";
-  resizeInput();
-  promptInput.focus();
-});
+    <section class="workspace" aria-label="BondStats AI Chat">
+      <div class="workspace-head">
+        <div>
+          <span class="eyebrow">LIVE ANALYSIS</span>
+          <h2>Financial Intelligence Console</h2>
+        </div>
 
-resizeInput();
-setStatus("Analysis Engine Online");
-promptInput.focus();
+        <button id="clearBtn" class="ghost-button" type="button">
+          New Session
+        </button>
+      </div>
+
+      <div id="messages" class="messages" role="log" aria-live="polite">
+        <article class="message assistant-message">
+          <div class="assistant-avatar" aria-hidden="true">AI</div>
+
+          <div class="message-bubble">
+            <span class="message-speaker">BONDSTATS AI</span>
+            <p>
+              Ready. Ask a question about financial markets,
+              bonds, inflation, central banks or risk.
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div id="thinking" class="thinking hidden" aria-live="polite">
+        <span></span>
+        <span></span>
+        <span></span>
+        <p>Building analysis</p>
+      </div>
+
+      <form id="chatForm" class="composer">
+        <label class="sr-only" for="prompt">Finanzfrage eingeben</label>
+
+        <textarea
+          id="prompt"
+          name="prompt"
+          rows="1"
+          maxlength="6000"
+          autocomplete="off"
+          placeholder="Ask a financial question..."
+          required
+        ></textarea>
+
+        <button id="sendBtn" class="send-button" type="submit">
+          <span>Analyze</span>
+          <span class="send-arrow" aria-hidden="true">↗</span>
+        </button>
+      </form>
+
+      <div class="composer-meta">
+        <span>Independent analytical reasoning</span>
+        <span>Educational information · No investment advice</span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>BondStats AI</span>
+      <span>Financial Intelligence Interface</span>
+    </footer>
+  </main>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
