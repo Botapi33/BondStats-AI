@@ -1,0 +1,18 @@
+{
+  "name": "bondstats-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Focused financial intelligence chat",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/server.js",
+    "start": "node server/server.js",
+    "check": "node --check server/server.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
