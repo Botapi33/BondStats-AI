@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: bondstats-ai
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: AI_API_KEY
+        sync: false
+
+      - key: AI_MODEL
+        value: gpt-4.1-mini
