@@ -85,7 +85,34 @@ function addAssistantMessage(data) {
             </div>
           `).join("")}
         </div>
+        ${
+  Array.isArray(data.sources) && data.sources.length > 0
+    ? `
+      <div class="sources-block">
+        <strong>SOURCES</strong>
 
+        <ul>
+          ${data.sources.map(source => `
+            <li>
+              <a
+                href="${escapeHTML(source.url || "#")}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ${escapeHTML(
+                  source.title ||
+                  source.name ||
+                  source.url ||
+                  "View source"
+                )}
+              </a>
+            </li>
+          `).join("")}
+        </ul>
+      </div>
+    `
+    : ""
+}
         <p class="disclaimer">
           ${escapeHTML(data.disclaimer || "Educational financial information only.")}
         </p>
