@@ -71,8 +71,12 @@ function addAssistantMessage(data) {
       <div class="message-bubble">
         <span class="message-speaker">BONDSTATS AI</span>
 
-        <p>${escapeHTML(data.answer || "No answer returned.")}</p>
-
+<p>${escapeHTML(
+  String(data.answer || "No answer returned.")
+    .replace(/\(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\)/g, "")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "")
+    .trim()
+)}</p>
         <div class="analysis-grid">
           ${blocks.map(([title, content]) => `
             <div class="analysis-block">
