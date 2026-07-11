@@ -71,12 +71,8 @@ function addAssistantMessage(data) {
       <div class="message-bubble">
         <span class="message-speaker">BONDSTATS AI</span>
 
-<p>${escapeHTML(
-  String(data.answer || "No answer returned.")
-    .replace(/\(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\)/g, "")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "")
-    .trim()
-)}</p>
+        <p>${escapeHTML(data.answer || "No answer returned.")}</p>
+
         <div class="analysis-grid">
           ${blocks.map(([title, content]) => `
             <div class="analysis-block">
@@ -85,34 +81,7 @@ function addAssistantMessage(data) {
             </div>
           `).join("")}
         </div>
-        ${
-  Array.isArray(data.sources) && data.sources.length > 0
-    ? `
-      <div class="sources-block">
-        <strong>SOURCES</strong>
 
-        <ul>
-          ${data.sources.map(source => `
-            <li>
-              <a
-                href="${escapeHTML(source.url || "#")}"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ${escapeHTML(
-                  source.title ||
-                  source.name ||
-                  source.url ||
-                  "View source"
-                )}
-              </a>
-            </li>
-          `).join("")}
-        </ul>
-      </div>
-    `
-    : ""
-}
         <p class="disclaimer">
           ${escapeHTML(data.disclaimer || "Educational financial information only.")}
         </p>
