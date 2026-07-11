@@ -274,7 +274,7 @@ function addUserMessage(text) {
   scrollToBottom();
 }
 
-function buildAnalysisBlocks(data) {
+function AnalysisBlocks(data) {
   const blocks = [
     [
       "WHY IT MATTERS",
@@ -312,7 +312,7 @@ function buildAnalysisBlocks(data) {
     .join("");
 }
 
-function buildConfidenceExplanation(data) {
+function ConfidenceExplanation(data) {
   const explanation = safeText(
     data?.confidenceExplanation,
     ""
@@ -329,9 +329,7 @@ function buildConfidenceExplanation(data) {
   `;
 }
 
-function buildVerificationBlock(data) {
-  const verification = data?.verification;
-  const instrument = data?.instrument;
+
 
   if (
     !verification ||
@@ -545,8 +543,6 @@ function addAssistantMessage(data) {
           <div class="analysis-grid">
             ${buildAnalysisBlocks(data)}
           </div>
-
-          ${buildConfidenceExplanation(data)}
 
           ${buildVerificationBlock(data)}
 
