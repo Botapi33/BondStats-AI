@@ -141,7 +141,7 @@ function addErrorMessage(text) {
 
 async function askBondStatsAI(message) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
   try {
     const response = await fetch(SUPABASE_FUNCTION_URL, {
