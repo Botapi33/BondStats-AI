@@ -81,8 +81,9 @@ function addAssistantMessage(data) {
           ${blocks.map(([title, content]) => `
             <div class="analysis-block">
               <strong>${escapeHTML(title)}</strong>
-              <p>${escapeHTML(content || "Not available.")}</p>
-            </div>
+<p>${escapeHTML(
+  cleanMarkdown(content || "Not available.")
+)}</p>            </div>
           `).join("")}
         </div>
         ${
