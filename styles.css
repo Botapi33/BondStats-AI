@@ -573,3 +573,38 @@ button{cursor:pointer}
     display:none;
   }
 }
+.sources-block {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(110,255,170,.25);
+  border-radius: 16px;
+  background: rgba(10,35,20,.35);
+}
+
+.sources-block strong {
+  display:block;
+  margin-bottom:10px;
+  color:#72ffb0;
+  font-size:.75rem;
+  letter-spacing:.12em;
+}
+
+.sources-block ul{
+  margin:0;
+  padding-left:20px;
+}
+
+.sources-block li{
+  margin:8px 0;
+}
+
+.sources-block a{
+  color:#9dffc8;
+  text-decoration:none;
+  overflow-wrap:anywhere;
+}
+
+.sources-block a:hover{
+  text-decoration:underline;
+  color:#c9ffe2;
+}
