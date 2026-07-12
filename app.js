@@ -378,23 +378,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (
       typeof verification.openFigiMapped === "boolean"
     ) {
-      rows.push([
-        "OpenFIGI",
-        verification.openFigiMapped
-          ? "Mapped"
-          : "Not mapped"
-      ]);
+    rows.push([
+  "OpenFIGI mapping",
+  verification.openFigiMapped
+    ? "Successful"
+    : "No match found"
+]);
     }
 
     if (
       typeof verification.webVerified === "boolean"
     ) {
-      rows.push([
-        "Web verification",
-        verification.webVerified
-          ? "Verified"
-          : "Not verified"
-      ]);
+     rows.push([
+  "Web verification",
+  verification.webVerified
+    ? "Verified"
+    : verification.openFigiMapped
+      ? "Not required"
+      : "Not verified"
+]);
     }
 
     if (instrument?.name) {
