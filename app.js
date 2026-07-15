@@ -1015,6 +1015,41 @@ document.addEventListener("DOMContentLoaded", () => {
      Assistant message rendering
   ======================================================= */
 
+  /*
+===========================================================
+AI Insights Block
+===========================================================
+*/
+
+function buildAIInsightsBlock(data) {
+
+  const insights = Array.isArray(data?.aiInsights)
+    ? data.aiInsights
+        .map(item => safeText(item, ""))
+        .filter(Boolean)
+        .slice(0,5)
+    : [];
+
+  if (insights.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="ai-insights">
+
+      <strong>AI INSIGHTS</strong>
+
+      <ul>
+        ${insights.map(item => `
+          <li>${escapeHTML(item)}</li>
+        `).join("")}
+
+      </ul>
+
+    </div>
+  `;
+}
+  
   function addAssistantMessage(data) {
     removeTypingIndicator();
 
@@ -1051,6 +1086,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ${buildMarketSnapshotBlock(data)}
 
             ${buildVerificationScoreBlock(data)}
+
+            ${buildAIInsightsBlock(data)}
 
             <div class="analysis-grid">
               ${buildAnalysisBlocks(data)}
