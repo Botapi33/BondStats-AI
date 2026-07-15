@@ -10,6 +10,8 @@
 const SUPABASE_FUNCTION_URL =
   "https://kiyuawmnmzffqlgvntbv.supabase.co/functions/v1/swift-api";
 
+const REQUEST_TIMEOUT_MS = 45000;
+
 document.addEventListener("DOMContentLoaded", () => {
   /* =======================================================
      Find elements — supports several possible IDs/classes
@@ -61,9 +63,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let busy = false;
   let conversationHistory = [];
+  let activeController = null;
 
   /* =======================================================
-     Helpers
+     General helpers
   ======================================================= */
 
   function escapeHTML(value) {
@@ -77,7 +80,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function cleanMarkdown(value) {
     return String(value ?? "")
-      // Markdown links: preserve the readable title.
+      /*
+       * Markdown links:
+       * preserve the readable title and remove the URL.
+       */
       .replace(
         /\(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\)/gi,
         "$1"
@@ -87,21 +93,31 @@ document.addEventListener("DOMContentLoaded", () => {
         "$1"
       )
 
-      // Remove bare URLs from prose.
+      /*
+       * Remove bare URLs from normal prose.
+       * Source links are rendered separately.
+       */
       .replace(
         /\s*\(?https?:\/\/[^\s)]+(?:\))?/gi,
         ""
       )
 
-      // Remove common Markdown formatting.
+      /*
+       * Remove common Markdown formatting.
+       */
       .replace(/\*\*([^*]+)\*\*/g, "$1")
       .replace(/__([^_]+)__/g, "$1")
       .replace(/\*([^*\n]+)\*/g, "$1")
       .replace(/^#{1,6}\s+/gm, "")
-      .replace(/```(?:json|text|javascript|typescript)?/gi, "")
+      .replace(
+        /```(?:json|text|javascript|typescript)?/gi,
+        ""
+      )
       .replace(/```/g, "")
 
-      // Normalize list signs and whitespace.
+      /*
+       * Normalize lists and whitespace.
+       */
       .replace(/^\s*[-*]\s+/gm, "• ")
       .replace(/[ \t]{2,}/g, " ")
       .replace(/\s+([.,;:!?])/g, "$1")
@@ -109,8 +125,12 @@ document.addEventListener("DOMContentLoaded", () => {
       .trim();
   }
 
-  function safeText(value, fallback = "Not available.") {
+  function safeText(
+    value,
+    fallback = "Not available."
+  ) {
     const cleaned = cleanMarkdown(value);
+
     return cleaned || fallback;
   }
 
@@ -129,10 +149,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return null;
       }
 
-      url.searchParams.delete("utm_source");
-      url.searchParams.delete("utm_medium");
-      url.searchParams.delete("utm_campaign");
-      url.searchParams.delete("utm_content");
+      /*
+       * Remove tracking parameters.
+       */
+      const trackingParameters = [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term"
+      ];
+
+      for (const parameter of trackingParameters) {
+        url.searchParams.delete(parameter);
+      }
 
       return url.toString();
     } catch {
@@ -154,11 +184,17 @@ document.addEventListener("DOMContentLoaded", () => {
         continue;
       }
 
-      let title = cleanMarkdown(source?.title);
+      let title =
+        cleanMarkdown(source?.title);
 
-      if (!title || title.toLowerCase() === "view source") {
+      if (
+        !title ||
+        title.toLowerCase() === "view source"
+      ) {
         try {
-          title = new URL(url).hostname.replace(/^www\./, "");
+          title = new URL(url)
+            .hostname
+            .replace(/^www\./, "");
         } catch {
           title = "View source";
         }
@@ -170,14 +206,17 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    return [...unique.values()].slice(0, 5);
+    return [...unique.values()]
+      .slice(0, 5);
   }
 
   function scrollToBottom() {
     requestAnimationFrame(() => {
-      messages.scrollTop = messages.scrollHeight;
+      messages.scrollTop =
+        messages.scrollHeight;
 
-      const lastMessage = messages.lastElementChild;
+      const lastMessage =
+        messages.lastElementChild;
 
       if (lastMessage) {
         lastMessage.scrollIntoView({
@@ -192,11 +231,15 @@ document.addEventListener("DOMContentLoaded", () => {
     promptInput.style.height = "auto";
 
     const nextHeight = Math.min(
-      promptInput.scrollHeight,
+      Math.max(
+        promptInput.scrollHeight,
+        48
+      ),
       180
     );
 
-    promptInput.style.height = `${nextHeight}px`;
+    promptInput.style.height =
+      `${nextHeight}px`;
   }
 
   function setStatus(text) {
@@ -210,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (sendBtn) {
       sendBtn.disabled = busy;
+
       sendBtn.setAttribute(
         "aria-busy",
         String(busy)
@@ -217,9 +261,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /*
-     * Keep the input enabled while waiting so the layout
-     * does not change unexpectedly. Duplicate submits are
-     * prevented by the busy variable.
+     * Keep the input enabled while waiting.
+     * Duplicate requests are prevented by `busy`.
      */
     promptInput.setAttribute(
       "aria-busy",
@@ -234,7 +277,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function addToHistory(role, content) {
-    const cleaned = cleanMarkdown(content);
+    const cleaned =
+      cleanMarkdown(content);
 
     if (!cleaned) {
       return;
@@ -245,6 +289,10 @@ document.addEventListener("DOMContentLoaded", () => {
       content: cleaned.slice(0, 2500)
     });
 
+    /*
+     * Keep only the most recent messages
+     * to avoid sending an oversized history.
+     */
     conversationHistory =
       conversationHistory.slice(-6);
   }
@@ -255,7 +303,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function removeTypingIndicator() {
     const existing =
-      document.querySelector("#bondstatsTypingMessage");
+      document.querySelector(
+        "#bondstatsTypingMessage"
+      );
 
     if (existing) {
       existing.remove();
@@ -286,7 +336,8 @@ document.addEventListener("DOMContentLoaded", () => {
             </span>
 
             <p class="typing-text">
-              BondStats AI is typing<span class="typing-dots">...</span>
+              BondStats AI is typing
+              <span class="typing-dots">...</span>
             </p>
           </div>
         </article>
@@ -297,7 +348,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* =======================================================
-     Message rendering
+     User message rendering
   ======================================================= */
 
   function addUserMessage(text) {
@@ -306,8 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
       `
         <article class="message user-message">
           <div class="message-bubble">
-            <span class="message-speaker">YOU</span>
-            <p>${escapeHTML(text)}</p>
+            <span class="message-speaker">
+              YOU
+            </span>
+
+            <p>
+              ${escapeHTML(text)}
+            </p>
           </div>
         </article>
       `
@@ -315,21 +371,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scrollToBottom();
   }
+    /* =======================================================
+     Analysis blocks
+  ======================================================= */
 
   function buildAnalysisBlocks(data) {
     const blocks = [
-      ["WHY IT MATTERS", data?.why],
-      ["MECHANISM", data?.mechanism],
-      ["COUNTERCASE", data?.countercase],
-      ["CONFIDENCE", data?.confidence],
-      ["WHAT WOULD CHANGE THE VIEW", data?.change]
+      [
+        "WHY IT MATTERS",
+        data?.why
+      ],
+      [
+        "MECHANISM",
+        data?.mechanism
+      ],
+      [
+        "COUNTERCASE",
+        data?.countercase
+      ],
+      [
+        "CONFIDENCE",
+        data?.confidence
+      ],
+      [
+        "WHAT WOULD CHANGE THE VIEW",
+        data?.change
+      ]
     ];
 
     return blocks
       .map(([title, content]) => {
         return `
           <div class="analysis-block">
-            <strong>${escapeHTML(title)}</strong>
+            <strong>
+              ${escapeHTML(title)}
+            </strong>
+
             <p>
               ${escapeHTML(
                 safeText(content)
@@ -341,12 +418,20 @@ document.addEventListener("DOMContentLoaded", () => {
       .join("");
   }
 
+  /* =======================================================
+     Verification block
+  ======================================================= */
+
   function buildVerificationBlock(data) {
-    const verification = data?.verification;
-    const instrument = data?.instrument;
+    const verification =
+      data?.verification;
+
+    const instrument =
+      data?.instrument;
 
     /*
-     * Do not show verification for normal questions.
+     * Do not show verification information
+     * for normal questions without an ISIN.
      */
     if (
       !verification ||
@@ -365,7 +450,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (
-      typeof verification.checksumValid === "boolean"
+      typeof verification.checksumValid ===
+      "boolean"
     ) {
       rows.push([
         "Checksum",
@@ -376,27 +462,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (
-      typeof verification.openFigiMapped === "boolean"
+      typeof verification.openFigiMapped ===
+      "boolean"
     ) {
-    rows.push([
-  "OpenFIGI mapping",
-  verification.openFigiMapped
-    ? "Successful"
-    : "No match found"
-]);
+      rows.push([
+        "OpenFIGI mapping",
+        verification.openFigiMapped
+          ? "Successful"
+          : "No match found"
+      ]);
     }
 
     if (
-      typeof verification.webVerified === "boolean"
+      typeof verification.webVerified ===
+      "boolean"
     ) {
-     rows.push([
-  "Web verification",
-  verification.webVerified
-    ? "Verified"
-    : verification.openFigiMapped
-      ? "Not required"
-      : "Not verified"
-]);
+      rows.push([
+        "Web verification",
+        verification.webVerified
+          ? "Verified"
+          : verification.openFigiMapped
+            ? "Not required"
+            : "Not verified"
+      ]);
     }
 
     if (instrument?.name) {
@@ -433,14 +521,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return `
       <div class="verification-block">
-        <strong>VERIFICATION</strong>
+        <strong>
+          VERIFICATION
+        </strong>
 
         <dl>
           ${rows
             .map(
               ([label, value]) => `
                 <div class="verification-row">
-                  <dt>${escapeHTML(label)}</dt>
+                  <dt>
+                    ${escapeHTML(label)}
+                  </dt>
+
                   <dd>
                     ${escapeHTML(
                       safeText(value)
@@ -455,6 +548,10 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
+  /* =======================================================
+     Sources
+  ======================================================= */
+
   function buildSourcesBlock(data) {
     const sources =
       normalizeSources(data?.sources);
@@ -465,7 +562,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return `
       <div class="sources-block">
-        <strong>SOURCES</strong>
+        <strong>
+          SOURCES
+        </strong>
 
         <ul>
           ${sources
@@ -473,11 +572,15 @@ document.addEventListener("DOMContentLoaded", () => {
               source => `
                 <li>
                   <a
-                    href="${escapeHTML(source.url)}"
+                    href="${escapeHTML(
+                      source.url
+                    )}"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    ${escapeHTML(source.title)}
+                    ${escapeHTML(
+                      source.title
+                    )}
                   </a>
                 </li>
               `
@@ -488,13 +591,22 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
-  function buildOptionalList(title, items) {
+  /* =======================================================
+     Optional detail sections
+  ======================================================= */
+
+  function buildOptionalList(
+    title,
+    items
+  ) {
     if (!Array.isArray(items)) {
       return "";
     }
 
     const cleanedItems = items
-      .map(item => safeText(item, ""))
+      .map(item =>
+        safeText(item, "")
+      )
       .filter(Boolean)
       .slice(0, 8);
 
@@ -504,13 +616,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return `
       <details class="supporting-details">
-        <summary>${escapeHTML(title)}</summary>
+        <summary>
+          ${escapeHTML(title)}
+        </summary>
 
         <ul>
           ${cleanedItems
             .map(
               item => `
-                <li>${escapeHTML(item)}</li>
+                <li>
+                  ${escapeHTML(item)}
+                </li>
               `
             )
             .join("")}
@@ -519,101 +635,385 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
+  /* =======================================================
+     Market Snapshot
+  ======================================================= */
+
   function buildMarketSnapshotBlock(data) {
-  const instrument =
-    data?.instrument && typeof data.instrument === "object"
-      ? data.instrument
-      : null;
+    const instrument =
+      data?.instrument &&
+      typeof data.instrument === "object"
+        ? data.instrument
+        : null;
 
-  const verification =
-    data?.verification && typeof data.verification === "object"
-      ? data.verification
-      : null;
+    const verification =
+      data?.verification &&
+      typeof data.verification === "object"
+        ? data.verification
+        : null;
 
-  /*
-   * Bei allgemeinen Fragen oder unbekannten Instrumenten
-   * keinen Snapshot anzeigen.
-   */
-  if (
-    !instrument ||
-    verification?.isinDetected !== true
-  ) {
-    return "";
-  }
-
-  const rows = [];
-
-  function addRow(label, value) {
-    const cleaned = safeText(value, "");
-
-    if (cleaned) {
-      rows.push([label, cleaned]);
+    /*
+     * Only show the snapshot when a real
+     * instrument object and an ISIN are present.
+     */
+    if (
+      !instrument ||
+      verification?.isinDetected !== true
+    ) {
+      return "";
     }
+
+    const rows = [];
+
+    function addRow(label, value) {
+      const cleaned =
+        safeText(value, "");
+
+      if (cleaned) {
+        rows.push([
+          label,
+          cleaned
+        ]);
+      }
+    }
+
+    addRow(
+      "Instrument",
+      instrument.name
+    );
+
+    addRow(
+      "Security type",
+      instrument.securityType ||
+        instrument.securityType2
+    );
+
+    addRow(
+      "Market sector",
+      instrument.marketSector
+    );
+
+    addRow(
+      "Ticker",
+      instrument.ticker
+    );
+
+    addRow(
+      "Exchange",
+      instrument.exchCode
+    );
+
+    addRow(
+      "FIGI",
+      instrument.figi
+    );
+
+    addRow(
+      "Composite FIGI",
+      instrument.compositeFIGI
+    );
+
+    if (verification?.isin) {
+      addRow(
+        "ISIN",
+        verification.isin
+      );
+    }
+
+    const verificationLabels = [];
+
+    if (
+      verification?.checksumValid === true
+    ) {
+      verificationLabels.push(
+        "ISIN valid"
+      );
+    }
+
+    if (
+      verification?.openFigiMapped === true
+    ) {
+      verificationLabels.push(
+        "OpenFIGI mapped"
+      );
+    }
+
+    if (
+      verification?.webVerified === true
+    ) {
+      verificationLabels.push(
+        "Web verified"
+      );
+    }
+
+    if (
+      verificationLabels.length > 0
+    ) {
+      rows.push([
+        "Verification",
+        verificationLabels.join(" • ")
+      ]);
+    }
+
+    if (rows.length === 0) {
+      return "";
+    }
+
+    return `
+      <div class="market-snapshot">
+        <strong>
+          MARKET SNAPSHOT
+        </strong>
+
+        <dl class="market-snapshot-grid">
+          ${rows
+            .map(
+              ([label, value]) => `
+                <div class="market-snapshot-row">
+                  <dt>
+                    ${escapeHTML(label)}
+                  </dt>
+
+                  <dd>
+                    ${escapeHTML(value)}
+                  </dd>
+                </div>
+              `
+            )
+            .join("")}
+        </dl>
+      </div>
+    `;
   }
 
-  addRow("Instrument", instrument.name);
-  addRow(
-    "Security type",
-    instrument.securityType ||
-      instrument.securityType2
-  );
-  addRow("Market sector", instrument.marketSector);
-  addRow("Ticker", instrument.ticker);
-  addRow("Exchange", instrument.exchCode);
-  addRow("FIGI", instrument.figi);
-  addRow("Composite FIGI", instrument.compositeFIGI);
+  /* =======================================================
+     Verification Score
+  ======================================================= */
 
-  if (verification?.isin) {
-    addRow("ISIN", verification.isin);
+  function buildVerificationScoreBlock(
+    data
+  ) {
+    const verification =
+      data?.verification &&
+      typeof data.verification === "object"
+        ? data.verification
+        : null;
+
+    /*
+     * No score for general questions.
+     */
+    if (
+      !verification ||
+      verification.isinDetected !== true
+    ) {
+      return "";
+    }
+
+    let score = 0;
+
+    const positiveSignals = [];
+    const limitations = [];
+
+    if (
+      verification.checksumValid === true
+    ) {
+      score += 25;
+
+      positiveSignals.push(
+        "ISIN checksum valid"
+      );
+    } else if (
+      verification.checksumValid === false
+    ) {
+      limitations.push(
+        "ISIN checksum invalid"
+      );
+    } else {
+      limitations.push(
+        "ISIN checksum unavailable"
+      );
+    }
+
+    if (
+      verification.openFigiMapped === true
+    ) {
+      score += 40;
+
+      positiveSignals.push(
+        "OpenFIGI mapping successful"
+      );
+    } else {
+      limitations.push(
+        "No OpenFIGI mapping"
+      );
+    }
+
+    if (
+      verification.webVerified === true
+    ) {
+      score += 35;
+
+      positiveSignals.push(
+        "Independent web verification"
+      );
+    } else {
+      limitations.push(
+        "No independent web verification"
+      );
+    }
+
+    if (
+      verification.ambiguous === true
+    ) {
+      score -= 35;
+
+      limitations.push(
+        "Multiple possible instrument matches"
+      );
+    }
+
+    score = Math.max(
+      0,
+      Math.min(100, score)
+    );
+
+    let level = "Low";
+
+    if (score >= 80) {
+      level = "High";
+    } else if (score >= 50) {
+      level = "Medium";
+    }
+
+    const positiveHTML =
+      positiveSignals.length > 0
+        ? `
+          <ul
+            class="
+              verification-score-signals
+              positive
+            "
+          >
+            ${positiveSignals
+              .map(
+                signal => `
+                  <li>
+                    ✓ ${escapeHTML(signal)}
+                  </li>
+                `
+              )
+              .join("")}
+          </ul>
+        `
+        : "";
+
+    const limitationsHTML =
+      limitations.length > 0
+        ? `
+          <ul
+            class="
+              verification-score-signals
+              limitations
+            "
+          >
+            ${limitations
+              .map(
+                limitation => `
+                  <li>
+                    ○ ${escapeHTML(
+                      limitation
+                    )}
+                  </li>
+                `
+              )
+              .join("")}
+          </ul>
+        `
+        : "";
+
+    return `
+      <div class="verification-score">
+        <div
+          class="verification-score-header"
+        >
+          <strong>
+            VERIFICATION SCORE
+          </strong>
+
+          <span
+            class="verification-score-value"
+          >
+            ${score}/100
+          </span>
+        </div>
+
+        <div
+          class="verification-score-meter"
+          role="meter"
+          aria-label="Verification score"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="${score}"
+        >
+          <span
+            style="width:${score}%"
+          ></span>
+        </div>
+
+        <p
+          class="verification-score-level"
+        >
+          Confidence in instrument identity:
+          <strong>
+            ${escapeHTML(level)}
+          </strong>
+        </p>
+
+        <div
+          class="verification-score-details"
+        >
+          ${positiveHTML}
+          ${limitationsHTML}
+        </div>
+      </div>
+    `;
+  }
+    /* =======================================================
+     Response metadata
+  ======================================================= */
+
+  function buildResponseMeta(data) {
+    const createdAt =
+      typeof data?.createdAt === "string"
+        ? new Date(data.createdAt)
+        : null;
+
+    if (
+      !createdAt ||
+      Number.isNaN(createdAt.getTime())
+    ) {
+      return "";
+    }
+
+    const formatted = createdAt.toLocaleString(
+      undefined,
+      {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }
+    );
+
+    return `
+      <p class="response-meta">
+        Analysis completed
+        ${escapeHTML(formatted)}
+      </p>
+    `;
   }
 
-  const verificationLabels = [];
-
-  if (verification?.checksumValid === true) {
-    verificationLabels.push("ISIN valid");
-  }
-
-  if (verification?.openFigiMapped === true) {
-    verificationLabels.push("OpenFIGI mapped");
-  }
-
-  if (verification?.webVerified === true) {
-    verificationLabels.push("Web verified");
-  }
-
-  if (verificationLabels.length > 0) {
-    rows.push([
-      "Verification",
-      verificationLabels.join(" • ")
-    ]);
-  }
-
-  /*
-   * Ohne verwertbare Daten keinen leeren Block erzeugen.
-   */
-  if (rows.length === 0) {
-    return "";
-  }
-
-  return `
-    <div class="market-snapshot">
-      <strong>MARKET SNAPSHOT</strong>
-
-      <dl class="market-snapshot-grid">
-        ${rows
-          .map(
-            ([label, value]) => `
-              <div class="market-snapshot-row">
-                <dt>${escapeHTML(label)}</dt>
-                <dd>${escapeHTML(value)}</dd>
-              </div>
-            `
-          )
-          .join("")}
-      </dl>
-    </div>
-  `;
-}
+  /* =======================================================
+     Assistant message rendering
+  ======================================================= */
 
   function addAssistantMessage(data) {
     removeTypingIndicator();
@@ -650,6 +1050,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             ${buildMarketSnapshotBlock(data)}
 
+            ${buildVerificationScoreBlock(data)}
+
             <div class="analysis-grid">
               ${buildAnalysisBlocks(data)}
             </div>
@@ -675,6 +1077,8 @@ document.addEventListener("DOMContentLoaded", () => {
               )}
             </div>
 
+            ${buildResponseMeta(data)}
+
             <p class="disclaimer">
               ${escapeHTML(disclaimer)}
             </p>
@@ -685,6 +1089,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scrollToBottom();
   }
+
+  /* =======================================================
+     Error message rendering
+  ======================================================= */
 
   function addErrorMessage(error) {
     removeTypingIndicator();
@@ -700,7 +1108,13 @@ document.addEventListener("DOMContentLoaded", () => {
     messages.insertAdjacentHTML(
       "beforeend",
       `
-        <article class="message assistant-message error-message">
+        <article
+          class="
+            message
+            assistant-message
+            error-message
+          "
+        >
           <div
             class="assistant-avatar"
             aria-hidden="true"
@@ -713,7 +1127,9 @@ document.addEventListener("DOMContentLoaded", () => {
               ANALYSIS ERROR
             </span>
 
-            <p>${escapeHTML(message)}</p>
+            <p>
+              ${escapeHTML(message)}
+            </p>
           </div>
         </article>
       `
@@ -727,6 +1143,26 @@ document.addEventListener("DOMContentLoaded", () => {
   ======================================================= */
 
   async function askBondStatsAI(message) {
+    /*
+     * Cancel any old request before starting a new one.
+     */
+    if (activeController) {
+      activeController.abort();
+    }
+
+    activeController =
+      new AbortController();
+
+    const timeoutId =
+      window.setTimeout(
+        () => {
+          if (activeController) {
+            activeController.abort();
+          }
+        },
+        REQUEST_TIMEOUT_MS
+      );
+
     let response;
 
     try {
@@ -736,25 +1172,44 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
 
           headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Content-Type":
+              "application/json",
+
+            "Accept":
+              "application/json"
           },
 
           body: JSON.stringify({
             message,
-            history: conversationHistory
-          })
+            history:
+              conversationHistory
+          }),
+
+          signal:
+            activeController.signal
         }
       );
     } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        throw new Error(
+          "The request took too long. Please try again."
+        );
+      }
+
       throw new Error(
         error instanceof Error
           ? `Network request failed: ${error.message}`
           : "Network request failed."
       );
+    } finally {
+      window.clearTimeout(timeoutId);
     }
 
-    const rawText = await response.text();
+    const rawText =
+      await response.text();
 
     let data;
 
@@ -801,7 +1256,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* =======================================================
-     Submission
+     Submit message
   ======================================================= */
 
   async function submitMessage() {
@@ -820,16 +1275,23 @@ document.addEventListener("DOMContentLoaded", () => {
     setBusy(true);
 
     addUserMessage(message);
-    addToHistory("user", message);
+
+    addToHistory(
+      "user",
+      message
+    );
 
     promptInput.value = "";
+
     resizeInput();
 
     showTypingIndicator();
 
     try {
       const data =
-        await askBondStatsAI(message);
+        await askBondStatsAI(
+          message
+        );
 
       addAssistantMessage(data);
 
@@ -845,39 +1307,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
       addErrorMessage(error);
     } finally {
+      activeController = null;
+
       removeTypingIndicator();
+
       setBusy(false);
+
       promptInput.focus();
     }
   }
 
+  /* =======================================================
+     Session reset
+  ======================================================= */
+
   function clearSession() {
-    if (busy) {
-      return;
+    if (activeController) {
+      activeController.abort();
+      activeController = null;
     }
 
+    busy = false;
+
     conversationHistory = [];
+
     removeTypingIndicator();
 
     const allMessages = [
-      ...messages.querySelectorAll(".message")
+      ...messages.querySelectorAll(
+        ".message"
+      )
     ];
 
     /*
-     * Keep only the welcome message.
+     * Keep the first welcome message.
      */
     allMessages
       .slice(1)
-      .forEach(element => element.remove());
+      .forEach(element => {
+        element.remove();
+      });
 
     promptInput.value = "";
+
     resizeInput();
+
     setStatus("Ready");
+
     promptInput.focus();
+
     scrollToBottom();
   }
-
-  /* =======================================================
+    /* =======================================================
      Events
   ======================================================= */
 
@@ -892,8 +1373,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /*
-   * Critical fix:
-   * Enter submits.
+   * Enter sends the message.
    * Shift + Enter creates a new line.
    */
   promptInput.addEventListener(
@@ -906,6 +1386,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ) {
         event.preventDefault();
         event.stopPropagation();
+
         submitMessage();
       }
     }
@@ -921,10 +1402,13 @@ document.addEventListener("DOMContentLoaded", () => {
       "click",
       event => {
         /*
-         * When the button is already inside the form,
-         * the form submit listener handles the event.
+         * If the button already belongs to the form,
+         * the form submit listener handles the request.
          */
-        if (!form || !form.contains(sendBtn)) {
+        if (
+          !form ||
+          !form.contains(sendBtn)
+        ) {
           event.preventDefault();
           submitMessage();
         }
@@ -951,8 +1435,11 @@ document.addEventListener("DOMContentLoaded", () => {
   ======================================================= */
 
   setBusy(false);
+
   resizeInput();
+
   scrollToBottom();
+
   promptInput.focus();
 
   console.log(
