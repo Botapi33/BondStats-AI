@@ -1030,24 +1030,53 @@ function buildAIInsightsBlock(data) {
         .slice(0,5)
     : [];
 
-  if (insights.length === 0) {
-    return "";
-  }
+  const followUps = Array.isArray(data?.followUpQuestions)
+  ? data.followUpQuestions
+      .map(item => safeText(item, ""))
+      .filter(Boolean)
+      .slice(0, 4)
+  : [];
+
+  if (
+  insights.length === 0 &&
+  followUps.length === 0
+) {
+  return "";
+}
 
   return `
-    <div class="ai-insights">
+  <div class="ai-insights">
 
-      <strong>AI INSIGHTS</strong>
+    ${
+      insights.length > 0
+        ? `
+          <strong>AI INSIGHTS</strong>
 
-      <ul>
-        ${insights.map(item => `
-          <li>${escapeHTML(item)}</li>
-        `).join("")}
+          <ul>
+            ${insights.map(item => `
+              <li>${escapeHTML(item)}</li>
+            `).join("")}
+          </ul>
+        `
+        : ""
+    }
 
-      </ul>
+    ${
+      followUps.length > 0
+        ? `
+          <strong>FOLLOW-UP QUESTIONS</strong>
 
-    </div>
-  `;
+          <ul>
+            ${followUps.map(question => `
+              <li>${escapeHTML(question)}</li>
+            `).join("")}
+          </ul>
+        `
+        : ""
+    }
+
+  </div>
+`;
 }
   
   function addAssistantMessage(data) {
