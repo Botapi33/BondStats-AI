@@ -1342,11 +1342,6 @@ function buildAIInsightsBlock(data) {
 
     addUserMessage(message);
 
-    addToHistory(
-      "user",
-      message
-    );
-
     promptInput.value = "";
 
     resizeInput();
@@ -1358,6 +1353,11 @@ function buildAIInsightsBlock(data) {
         await askBondStatsAI(
           message
         );
+
+      addToHistory(
+    "user",
+    message
+);
 
       addAssistantMessage(data);
 
