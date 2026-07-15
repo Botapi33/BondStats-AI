@@ -519,6 +519,102 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
+  function buildMarketSnapshotBlock(data) {
+  const instrument =
+    data?.instrument && typeof data.instrument === "object"
+      ? data.instrument
+      : null;
+
+  const verification =
+    data?.verification && typeof data.verification === "object"
+      ? data.verification
+      : null;
+
+  /*
+   * Bei allgemeinen Fragen oder unbekannten Instrumenten
+   * keinen Snapshot anzeigen.
+   */
+  if (
+    !instrument ||
+    verification?.isinDetected !== true
+  ) {
+    return "";
+  }
+
+  const rows = [];
+
+  function addRow(label, value) {
+    const cleaned = safeText(value, "");
+
+    if (cleaned) {
+      rows.push([label, cleaned]);
+    }
+  }
+
+  addRow("Instrument", instrument.name);
+  addRow(
+    "Security type",
+    instrument.securityType ||
+      instrument.securityType2
+  );
+  addRow("Market sector", instrument.marketSector);
+  addRow("Ticker", instrument.ticker);
+  addRow("Exchange", instrument.exchCode);
+  addRow("FIGI", instrument.figi);
+  addRow("Composite FIGI", instrument.compositeFIGI);
+
+  if (verification?.isin) {
+    addRow("ISIN", verification.isin);
+  }
+
+  const verificationLabels = [];
+
+  if (verification?.checksumValid === true) {
+    verificationLabels.push("ISIN valid");
+  }
+
+  if (verification?.openFigiMapped === true) {
+    verificationLabels.push("OpenFIGI mapped");
+  }
+
+  if (verification?.webVerified === true) {
+    verificationLabels.push("Web verified");
+  }
+
+  if (verificationLabels.length > 0) {
+    rows.push([
+      "Verification",
+      verificationLabels.join(" • ")
+    ]);
+  }
+
+  /*
+   * Ohne verwertbare Daten keinen leeren Block erzeugen.
+   */
+  if (rows.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="market-snapshot">
+      <strong>MARKET SNAPSHOT</strong>
+
+      <dl class="market-snapshot-grid">
+        ${rows
+          .map(
+            ([label, value]) => `
+              <div class="market-snapshot-row">
+                <dt>${escapeHTML(label)}</dt>
+                <dd>${escapeHTML(value)}</dd>
+              </div>
+            `
+          )
+          .join("")}
+      </dl>
+    </div>
+  `;
+}
+
   function addAssistantMessage(data) {
     removeTypingIndicator();
 
@@ -551,6 +647,8 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="assistant-answer">
               ${escapeHTML(answer)}
             </p>
+
+            ${buildMarketSnapshotBlock(data)}
 
             <div class="analysis-grid">
               ${buildAnalysisBlocks(data)}
