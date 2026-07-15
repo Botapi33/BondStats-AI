@@ -276,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  ToHistory(role, content) {
+  function addToHistory(role, content) {
     const cleaned =
       cleanMarkdown(content);
 
@@ -351,7 +351,7 @@ document.addEventListener("DOMContentLoaded", () => {
      User message rendering
   ======================================================= */
 
-  UserMessage(text) {
+  function addUserMessage(text) {
     messages.insertAdjacentHTML(
       "beforeend",
       `
@@ -665,7 +665,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = [];
 
-    Row(label, value) {
+    function addRow(label, value) {
       const cleaned =
         safeText(value, "");
 
@@ -1049,39 +1049,6 @@ function buildAIInsightsBlock(data) {
     </div>
   `;
 }
-
-  function buildFollowUpBlock(data){
-
-    const questions =
-        Array.isArray(data?.followUpQuestions)
-        ? data.followUpQuestions
-            .filter(Boolean)
-            .slice(0,4)
-        : [];
-
-    if(questions.length===0){
-        return "";
-    }
-
-    return `
-    <div class="follow-up-block">
-
-        <strong>SUGGESTED FOLLOW-UP QUESTIONS</strong>
-
-        <ul>
-
-        ${questions.map(question=>`
-
-            <li>${escapeHTML(question)}</li>
-
-        `).join("")}
-
-        </ul>
-
-    </div>
-    `;
-
-}
   
   function addAssistantMessage(data) {
     removeTypingIndicator();
@@ -1121,8 +1088,6 @@ function buildAIInsightsBlock(data) {
             ${buildVerificationScoreBlock(data)}
 
             ${buildAIInsightsBlock(data)}
-
-            ${buildFollowUpBlock(data)}
 
             <div class="analysis-grid">
               ${buildAnalysisBlocks(data)}
