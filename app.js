@@ -1061,19 +1061,25 @@ function buildAIInsightsBlock(data) {
         : ""
     }
 
-    ${
-      followUps.length > 0
-        ? `
-          <strong>FOLLOW-UP QUESTIONS</strong>
+   ${
+  followUps.length > 0
+    ? `
+      <strong>FOLLOW-UP QUESTIONS</strong>
 
-          <ul>
-            ${followUps.map(question => `
-              <li>${escapeHTML(question)}</li>
-            `).join("")}
-          </ul>
-        `
-        : ""
-    }
+      <div class="follow-up-actions">
+        ${followUps.map(question => `
+          <button
+            type="button"
+            class="follow-up-question"
+            data-question="${escapeHTML(question)}"
+          >
+            ${escapeHTML(question)}
+          </button>
+        `).join("")}
+      </div>
+    `
+    : ""
+}
 
   </div>
 `;
@@ -1438,6 +1444,31 @@ function buildAIInsightsBlock(data) {
     );
   }
 
+  messages.addEventListener(
+  "click",
+  event => {
+    const button =
+      event.target.closest(
+        ".follow-up-question"
+      );
+
+    if (!button || busy) {
+      return;
+    }
+
+    const question =
+      button.dataset.question?.trim();
+
+    if (!question) {
+      return;
+    }
+
+    promptInput.value = question;
+    resizeInput();
+    submitMessage();
+  }
+);
+  
   /*
    * Enter sends the message.
    * Shift + Enter creates a new line.
