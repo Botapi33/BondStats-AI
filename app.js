@@ -1663,30 +1663,51 @@ const showPdfExport =
   messages.addEventListener(
   "click",
   event => {
-    
-    const pdfButton = event.target.closest(".pdf-export-button");
+    const target = event.target;
 
-    if (pdfButton) {
-      const message = pdfButton.closest(".assistant-message");
-      exportMessageAsPDF(message);
+    if (!(target instanceof Element)) {
       return;
     }
 
-    const button =
-      event.target.closest(
+    const pdfButton =
+      target.closest(
+        ".pdf-export-button"
+      );
+
+    if (pdfButton) {
+      const messageElement =
+        pdfButton.closest(
+          ".assistant-message"
+        );
+
+      exportMessageAsPDF(
+        messageElement
+      );
+
+      return;
+    }
+
+    const followUpButton =
+      target.closest(
         ".follow-up-question"
       );
 
-    if (!button || busy) {
+    if (!followUpButton || busy) {
       return;
     }
 
     const question =
-      button.dataset.question?.trim();
+      followUpButton.dataset.question?.trim();
 
     if (!question) {
       return;
     }
+
+    promptInput.value = question;
+    resizeInput();
+    submitMessage();
+  }
+);
 
     promptInput.value = question;
     resizeInput();
