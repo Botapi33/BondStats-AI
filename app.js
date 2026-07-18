@@ -1098,6 +1098,40 @@ function buildAIInsightsBlock(data) {
       "Educational financial information only. Not individualized investment advice."
     );
 
+    const meaningfulAnalysisParts = [
+  data?.why,
+  data?.mechanism,
+  data?.countercase,
+  data?.change
+].filter(value =>
+  typeof value === "string" &&
+  value.trim().length >= 40 &&
+  value.trim().toLowerCase() !== "not available."
+);
+
+const hasInstrument =
+  data?.verification?.isinDetected === true ||
+  Boolean(data?.instrument);
+
+const hasSources =
+  Array.isArray(data?.sources) &&
+  data.sources.length > 0;
+
+const hasInsights =
+  Array.isArray(data?.aiInsights) &&
+  data.aiInsights.length > 0;
+
+const showPdfExport =
+  hasInstrument ||
+  (
+    hasSources &&
+    meaningfulAnalysisParts.length >= 2
+  ) ||
+  (
+    meaningfulAnalysisParts.length >= 3 &&
+    hasInsights
+  );
+
     messages.insertAdjacentHTML(
       "beforeend",
       `
@@ -1113,6 +1147,20 @@ function buildAIInsightsBlock(data) {
             <span class="message-speaker">
               BONDSTATS AI
             </span>
+
+            ${
+  showPdfExport
+    ? `
+      <button
+        type="button"
+        class="pdf-export-button"
+        aria-label="Export this analysis as PDF"
+      >
+        Export PDF
+      </button>
+    `
+    : ""
+}
 
             <p class="assistant-answer">
               ${escapeHTML(answer)}
