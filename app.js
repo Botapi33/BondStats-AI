@@ -1482,6 +1482,174 @@ const showPdfExport =
      Events
   ======================================================= */
 
+  function exportMessageAsPDF(messageElement) {
+  if (!messageElement) {
+    return;
+  }
+
+  const printableContent =
+    messageElement.cloneNode(true);
+
+  printableContent
+    .querySelectorAll(
+      ".pdf-export-button, .follow-up-actions"
+    )
+    .forEach(element => {
+      element.remove();
+    });
+
+  printableContent
+    .querySelectorAll("details")
+    .forEach(detailsElement => {
+      detailsElement.open = true;
+    });
+
+  const printWindow = window.open(
+    "",
+    "_blank"
+  );
+
+  if (!printWindow) {
+    addErrorMessage(
+      "The PDF window was blocked. Please allow pop-ups and try again."
+    );
+    return;
+  }
+
+  const now = new Date();
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>BondStats AI Analysis</title>
+
+        <style>
+          @page {
+            size: A4;
+            margin: 18mm;
+          }
+
+          body {
+            margin: 0;
+            color: #152019;
+            background: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11pt;
+            line-height: 1.55;
+          }
+
+          .pdf-header {
+            margin-bottom: 24px;
+            padding-bottom: 14px;
+            border-bottom: 2px solid #24a866;
+          }
+
+          .pdf-header h1 {
+            margin: 0 0 6px;
+            font-size: 22pt;
+          }
+
+          .pdf-header p {
+            margin: 0;
+            color: #667169;
+            font-size: 9pt;
+          }
+
+          .assistant-avatar,
+          .pdf-export-button,
+          .follow-up-actions {
+            display: none !important;
+          }
+
+          .assistant-message,
+          .message-bubble {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+          }
+
+          .message-speaker {
+            display: block;
+            margin-bottom: 12px;
+            color: #16864e;
+            font-size: 9pt;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+          }
+
+          .assistant-answer {
+            margin: 0 0 18px;
+            font-size: 13pt;
+            font-weight: 600;
+          }
+
+          .analysis-block,
+          .market-snapshot,
+          .verification-score,
+          .verification-block,
+          .sources-block,
+          .ai-insights,
+          details {
+            break-inside: avoid;
+            margin: 13px 0;
+            padding: 12px;
+            border: 1px solid #ccd8d0;
+            border-radius: 8px;
+            background: #f7faf8;
+          }
+
+          strong,
+          summary {
+            color: #16864e;
+          }
+
+          ul {
+            padding-left: 20px;
+          }
+
+          a {
+            color: #116c42;
+            overflow-wrap: anywhere;
+          }
+
+          .response-meta,
+          .disclaimer {
+            margin-top: 17px;
+            color: #6c766f;
+            font-size: 8.5pt;
+          }
+        </style>
+      </head>
+
+      <body>
+        <header class="pdf-header">
+          <h1>BondStats AI Analysis</h1>
+          <p>
+            Generated ${escapeHTML(now.toLocaleString())}
+          </p>
+        </header>
+
+        <main>
+          ${printableContent.outerHTML}
+        </main>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 400);
+}
+
   if (form) {
     form.addEventListener(
       "submit",
@@ -1495,6 +1663,20 @@ const showPdfExport =
   messages.addEventListener(
   "click",
   event => {
+    messages.addEventListener(
+  "click",
+  event => {
+
+    const pdfButton = event.target.closest(".pdf-export-button");
+
+    if (pdfButton) {
+      const message = pdfButton.closest(".assistant-message");
+      exportMessageAsPDF(message);
+      return;
+    }
+
+    const button =
+      event.target.closest(".follow-up-question");
     const button =
       event.target.closest(
         ".follow-up-question"
