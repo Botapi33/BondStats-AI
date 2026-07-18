@@ -1663,10 +1663,7 @@ const showPdfExport =
   messages.addEventListener(
   "click",
   event => {
-    messages.addEventListener(
-  "click",
-  event => {
-
+    
     const pdfButton = event.target.closest(".pdf-export-button");
 
     if (pdfButton) {
@@ -1675,8 +1672,6 @@ const showPdfExport =
       return;
     }
 
-    const button =
-      event.target.closest(".follow-up-question");
     const button =
       event.target.closest(
         ".follow-up-question"
