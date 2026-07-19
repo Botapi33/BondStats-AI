@@ -1106,6 +1106,8 @@ const showPdfExport =
     Array.isArray(data?.sources) &&
     data.sources.length > 0
   );
+
+const showShareButton = showPdfExport;   
     
     messages.insertAdjacentHTML(
       "beforeend",
@@ -1137,7 +1139,19 @@ const showPdfExport =
     : ""
 }
 
-
+${
+  showShareButton
+    ? `
+      <button
+        type="button"
+        class="share-analysis-button"
+        onclick="shareBondStatsAnalysis(this)"
+      >
+        Share
+      </button>
+    `
+    : ""
+}
             <p class="assistant-answer">
               ${escapeHTML(answer)}
             </p>
@@ -1454,6 +1468,73 @@ const showPdfExport =
 
     scrollToBottom();
   }
+
+  ${
+  showShareButton
+    ? `
+      <button
+        type="button"
+        class="share-analysis-button"
+        onclick="shareBondStatsAnalysis(this)"
+      >
+        Share
+      </button>
+    `
+    : ""
+}async function shareBondStatsAnalysis(button) {
+  const messageElement =
+    button.closest(".assistant-message");
+
+  if (!messageElement) {
+    return;
+  }
+
+  const answer =
+    messageElement
+      .querySelector(".assistant-answer")
+      ?.textContent
+      ?.trim() || "";
+
+  const shareText = [
+    "BondStats AI Analysis",
+    "",
+    answer,
+    "",
+    "Explore more at BondStats AI"
+  ].join("\n");
+
+  const shareData = {
+    title: "BondStats AI Analysis",
+    text: shareText,
+    url: window.location.href
+  };
+
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+
+    await navigator.clipboard.writeText(
+      `${shareText}\n${window.location.href}`
+    );
+
+    const originalText = button.textContent;
+    button.textContent = "Copied";
+
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 1600);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      return;
+    }
+
+    addErrorMessage(
+      "Sharing failed. Please copy the page link manually."
+    );
+  }
+}
     /* =======================================================
      Events
   ======================================================= */
