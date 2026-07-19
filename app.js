@@ -1133,6 +1133,13 @@ const showPdfExport =
       >
         Export PDF
       </button>
+
+      <button
+  type="button"
+  class="share-analysis-button"
+>
+  Share
+</button>
     `
     : ""
 }
