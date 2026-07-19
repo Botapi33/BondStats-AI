@@ -814,34 +814,3 @@ font-weight:600;
   background: rgba(80,255,140,.18);
   border-color: #8dffb2;
 }
-.pdf-export-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 0 14px;
-  padding: 8px 14px;
-  border: 1px solid rgba(80, 255, 140, 0.35);
-  border-radius: 999px;
-  color: #8dffb2;
-  background: rgba(80, 255, 140, 0.08);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.pdf-export-button:hover {
-  border-color: #8dffb2;
-  background: rgba(80, 255, 140, 0.17);
-  transform: translateY(-1px);
-}
-
-.pdf-export-button:focus-visible {
-  outline: 2px solid #8dffb2;
-  outline-offset: 3px;
-}
