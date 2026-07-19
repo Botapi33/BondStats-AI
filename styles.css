@@ -814,3 +814,60 @@ font-weight:600;
   background: rgba(80,255,140,.18);
   border-color: #8dffb2;
 }
+.pdf-export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 14px;
+  padding: 8px 14px;
+  border: 1px solid rgba(80, 255, 140, 0.35);
+  border-radius: 999px;
+  color: #8dffb2;
+  background: rgba(80, 255, 140, 0.08);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .assistant-message:last-of-type,
+  .assistant-message:last-of-type * {
+    visibility: visible;
+  }
+
+  .assistant-message:last-of-type {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 24px;
+    color: #111;
+    background: #fff;
+  }
+
+  .pdf-export-button,
+  .follow-up-actions,
+  form,
+  nav,
+  header,
+  footer {
+    display: none !important;
+  }
+
+  .message-bubble,
+  .analysis-block,
+  .verification-score,
+  .verification-block,
+  .sources-block,
+  .ai-insights,
+  details {
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+  }
+}
