@@ -871,3 +871,36 @@ font-weight:600;
     border-color: #ccc !important;
   }
 }
+.analysis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.share-analysis-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border: 1px solid rgba(80, 255, 140, 0.35);
+  border-radius: 999px;
+  color: #8dffb2;
+  background: rgba(80, 255, 140, 0.08);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.share-analysis-button:hover {
+  border-color: #8dffb2;
+  background: rgba(80, 255, 140, 0.17);
+}
+
+@media print {
+  .analysis-actions,
+  .share-analysis-button {
+    display: none !important;
+  }
+}
