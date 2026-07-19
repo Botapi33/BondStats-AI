@@ -904,3 +904,22 @@ font-weight:600;
     display: none !important;
   }
 }
+.share-analysis-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border: 1px solid rgba(80, 255, 140, 0.35);
+  border-radius: 999px;
+  color: #8dffb2;
+  background: rgba(80, 255, 140, 0.08);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.share-analysis-button:hover {
+  border-color: #8dffb2;
+  background: rgba(80, 255, 140, 0.17);
+}
