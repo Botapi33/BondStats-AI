@@ -1098,6 +1098,15 @@ function buildAIInsightsBlock(data) {
       "Educational financial information only. Not individualized investment advice."
     );
 
+
+const showPdfExport =
+  data?.verification?.isinDetected === true ||
+  Boolean(data?.instrument) ||
+  (
+    Array.isArray(data?.sources) &&
+    data.sources.length > 0
+  );
+    
     messages.insertAdjacentHTML(
       "beforeend",
       `
@@ -1113,6 +1122,21 @@ function buildAIInsightsBlock(data) {
             <span class="message-speaker">
               BONDSTATS AI
             </span>
+
+            ${
+  showPdfExport
+    ? `
+      <button
+        type="button"
+        class="pdf-export-button"
+        onclick="window.print()"
+      >
+        Export PDF
+      </button>
+    `
+    : ""
+}
+
 
             <p class="assistant-answer">
               ${escapeHTML(answer)}
