@@ -320,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `
         <article
           id="bondstatsTypingMessage"
-          class="message assistant-message typing-message"
+          ="message assistant-message typing-message"
           aria-live="polite"
         >
           <div
@@ -1144,6 +1144,9 @@ const showPdfExport =
     : ""
 }
 
+${/\bif\b/i.test(answer) && /\b(basis points|bps|scenario|stress test)\b/i.test(answer)
+  ? '<div style="margin:12px 0;padding:14px 16px;border:1px solid rgba(80,255,140,.45);border-radius:14px;background:rgba(80,255,140,.08);"><strong style="display:block;font-size:13px;letter-spacing:1.4px;">BONDSTATS DIGITAL TWIN</strong><span style="font-size:12px;opacity:.75;">Scenario Simulation</span></div>'
+  : ''}
 
             <p class="assistant-answer">
               ${escapeHTML(answer)}
