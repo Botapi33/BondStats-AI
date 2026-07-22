@@ -319,10 +319,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "beforeend",
       `
         <article
-          id="bondstatsTypingMessage"
-          ="message assistant-message typing-message"
-          aria-live="polite"
-        >
+  id="bondstatsTypingMessage"
+  class="message assistant-message typing-message"
+  aria-live="polite"
+>
           <div
             class="assistant-avatar"
             aria-hidden="true"
