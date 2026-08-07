@@ -923,3 +923,716 @@ font-weight:600;
   border-color: #8dffb2;
   background: rgba(80, 255, 140, 0.17);
 }
+/* ============================================================
+   BONDSTATS AI — INSTITUTIONAL TERMINAL V3
+   SAFE FRONTEND-ONLY MEGA UPDATE
+
+   - NO API changes
+   - NO JavaScript changes
+   - NO HTML changes
+   - NO global typography overrides
+   - NO layout width overrides
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   DESIGN TOKENS
+   ------------------------------------------------------------ */
+
+:root {
+  --bsi-accent: #63f3a2;
+  --bsi-accent-soft: rgba(99, 243, 162, 0.10);
+  --bsi-accent-line: rgba(99, 243, 162, 0.24);
+  --bsi-accent-strong: rgba(99, 243, 162, 0.48);
+
+  --bsi-surface-1: rgba(7, 23, 18, 0.82);
+  --bsi-surface-2: rgba(9, 30, 23, 0.74);
+  --bsi-surface-3: rgba(13, 38, 29, 0.62);
+
+  --bsi-text: rgba(248, 252, 250, 0.96);
+  --bsi-text-soft: rgba(232, 243, 237, 0.78);
+  --bsi-text-muted: rgba(213, 229, 220, 0.56);
+
+  --bsi-radius-lg: 18px;
+  --bsi-radius-md: 13px;
+  --bsi-radius-sm: 9px;
+
+  --bsi-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.20);
+}
+
+
+/* ============================================================
+   ASSISTANT MESSAGE
+   Keep original dimensions, improve surface only
+   ============================================================ */
+
+.message.assistant-message .message-bubble {
+  position: relative;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(11, 39, 29, 0.78),
+      rgba(5, 20, 15, 0.88)
+    ) !important;
+
+  border-color: rgba(99, 243, 162, 0.28) !important;
+
+  box-shadow:
+    var(--bsi-shadow),
+    inset 0 1px 0 rgba(255,255,255,0.025) !important;
+
+  text-shadow: none !important;
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+
+/* Thin research-terminal accent */
+
+.message.assistant-message .message-bubble::after {
+  content: "";
+  position: absolute;
+
+  left: 18px;
+  right: 18px;
+  top: 0;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(99, 243, 162, 0.70),
+      transparent
+    );
+
+  pointer-events: none;
+}
+
+
+/* ------------------------------------------------------------
+   Assistant avatar
+   ------------------------------------------------------------ */
+
+.message.assistant-message .assistant-avatar {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(103, 247, 168, 0.96),
+      rgba(71, 210, 137, 0.90)
+    ) !important;
+
+  color: rgba(4, 30, 18, 0.96) !important;
+
+  border:
+    1px solid rgba(184, 255, 214, 0.32) !important;
+
+  box-shadow:
+    0 7px 18px rgba(57, 220, 133, 0.13) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* ------------------------------------------------------------
+   BondStats AI label
+   ------------------------------------------------------------ */
+
+.message.assistant-message .message-speaker {
+  color: var(--bsi-accent) !important;
+
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+
+  text-shadow: none !important;
+}
+
+
+/* ============================================================
+   AI INSIGHTS
+   Institutional research panel
+   ============================================================ */
+
+.message.assistant-message .ai-insights {
+  position: relative;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(12, 41, 30, 0.66),
+      rgba(6, 24, 18, 0.72)
+    ) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.17) !important;
+
+  border-radius: var(--bsi-radius-md) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.018) !important;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message .ai-insights h3,
+.message.assistant-message .ai-insights h4 {
+  color: var(--bsi-accent) !important;
+
+  text-transform: uppercase;
+  letter-spacing: 0.12em !important;
+
+  text-shadow: none !important;
+}
+
+
+/* Research-note style bullets */
+
+.message.assistant-message .ai-insights li {
+  position: relative;
+
+  color: var(--bsi-text-soft) !important;
+
+  border-bottom:
+    1px solid rgba(255,255,255,0.035);
+
+  padding-top: 4px;
+  padding-bottom: 6px;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message .ai-insights li:last-child {
+  border-bottom: none;
+}
+
+
+/* ============================================================
+   ANALYSIS BLOCKS
+   Why / Mechanism / Countercase / Change
+   ============================================================ */
+
+.message.assistant-message .analysis-block {
+  position: relative;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(7, 27, 20, 0.72),
+      rgba(4, 18, 14, 0.78)
+    ) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.13) !important;
+
+  border-radius: var(--bsi-radius-md) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.018) !important;
+
+  text-shadow: none !important;
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+
+.message.assistant-message .analysis-block:hover {
+  border-color:
+    rgba(99, 243, 162, 0.25) !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(10, 34, 25, 0.78),
+      rgba(5, 22, 16, 0.82)
+    ) !important;
+}
+
+
+.message.assistant-message .analysis-block h3,
+.message.assistant-message .analysis-block h4 {
+  color: var(--bsi-accent) !important;
+
+  letter-spacing: 0.11em !important;
+  text-transform: uppercase;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message .analysis-block p {
+  color: var(--bsi-text-soft) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* ============================================================
+   MECHANISM / CALCULATION PANEL
+   No font-size change
+   ============================================================ */
+
+.message.assistant-message
+.analysis-block[data-section="mechanism"] {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(3, 16, 12, 0.91),
+      rgba(6, 24, 18, 0.86)
+    ) !important;
+
+  border-color:
+    rgba(99, 243, 162, 0.21) !important;
+
+  box-shadow:
+    inset 3px 0 0 rgba(99, 243, 162, 0.38) !important;
+}
+
+
+.message.assistant-message
+.analysis-block[data-section="mechanism"] p {
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+
+  color: rgba(231, 245, 237, 0.88) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* Fallback if mechanism has its own class */
+
+.message.assistant-message .mechanism-block {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(3, 16, 12, 0.91),
+      rgba(6, 24, 18, 0.86)
+    ) !important;
+
+  border-color:
+    rgba(99, 243, 162, 0.21) !important;
+
+  box-shadow:
+    inset 3px 0 0 rgba(99, 243, 162, 0.38) !important;
+}
+
+
+/* ============================================================
+   COUNTERCASE
+   Slightly different visual identity
+   ============================================================ */
+
+.message.assistant-message
+.analysis-block[data-section="countercase"] {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(25, 28, 20, 0.58),
+      rgba(8, 22, 17, 0.75)
+    ) !important;
+
+  border-color:
+    rgba(220, 228, 156, 0.14) !important;
+}
+
+
+/* ============================================================
+   WHAT WOULD CHANGE THE VIEW
+   Make it look like a catalyst panel
+   ============================================================ */
+
+.message.assistant-message
+.analysis-block[data-section="change"] {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(9, 34, 26, 0.76),
+      rgba(5, 21, 16, 0.78)
+    ) !important;
+
+  box-shadow:
+    inset 3px 0 0 rgba(99, 243, 162, 0.23) !important;
+}
+
+
+/* ============================================================
+   CONFIDENCE
+   Compact visual treatment without changing layout
+   ============================================================ */
+
+.message.assistant-message .verification-score {
+  background:
+    rgba(99, 243, 162, 0.075) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.22) !important;
+
+  border-radius: var(--bsi-radius-sm) !important;
+
+  box-shadow: none !important;
+
+  color: var(--bsi-text) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* ============================================================
+   FOLLOW-UP QUESTIONS
+   Cleaner institutional chips
+   ============================================================ */
+
+.message.assistant-message .follow-up-actions {
+  gap: 8px !important;
+}
+
+
+.message.assistant-message .follow-up-actions button {
+  background:
+    rgba(8, 31, 23, 0.74) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.25) !important;
+
+  color:
+    rgba(236, 248, 241, 0.88) !important;
+
+  box-shadow: none !important;
+
+  text-shadow: none !important;
+
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+
+.message.assistant-message .follow-up-actions button:hover {
+  background:
+    rgba(19, 51, 38, 0.88) !important;
+
+  border-color:
+    rgba(99, 243, 162, 0.48) !important;
+
+  transform: translateY(-1px);
+}
+
+
+/* ============================================================
+   ASSUMPTIONS / FACTS / UNKNOWNS
+   Scoped ONLY to assistant messages
+   ============================================================ */
+
+.message.assistant-message details {
+  background:
+    rgba(4, 19, 14, 0.54) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.10) !important;
+
+  border-radius: var(--bsi-radius-sm) !important;
+
+  box-shadow: none !important;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message details:hover {
+  border-color:
+    rgba(99, 243, 162, 0.20) !important;
+}
+
+
+.message.assistant-message details summary {
+  color:
+    rgba(233, 244, 238, 0.80) !important;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message details[open] {
+  background:
+    rgba(6, 25, 18, 0.72) !important;
+
+  border-color:
+    rgba(99, 243, 162, 0.17) !important;
+}
+
+
+/* ============================================================
+   VERIFICATION & SOURCES
+   ============================================================ */
+
+.message.assistant-message .verification-block,
+.message.assistant-message .sources-block {
+
+  background:
+    rgba(4, 20, 15, 0.58) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.11) !important;
+
+  border-radius: var(--bsi-radius-md) !important;
+
+  box-shadow: none !important;
+
+  color: var(--bsi-text-soft) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* ============================================================
+   USER MESSAGE
+   Keep dimensions exactly as original
+   ============================================================ */
+
+.message.user-message .message-bubble {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(100, 242, 163, 0.94),
+      rgba(69, 209, 137, 0.92)
+    ) !important;
+
+  border-color:
+    rgba(190, 255, 218, 0.30) !important;
+
+  box-shadow:
+    0 8px 22px rgba(49, 208, 122, 0.10) !important;
+
+  color:
+    rgba(3, 27, 16, 0.92) !important;
+
+  text-shadow: none !important;
+}
+
+
+/* ============================================================
+   TYPING INDICATOR
+   ============================================================ */
+
+.message.assistant-message.typing-message .message-bubble {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(9, 31, 23, 0.74),
+      rgba(5, 20, 15, 0.80)
+    ) !important;
+
+  border-color:
+    rgba(99, 243, 162, 0.18) !important;
+
+  box-shadow: none !important;
+}
+
+
+.typing-dots {
+  color: var(--bsi-accent) !important;
+}
+
+
+/* ============================================================
+   ANALYSIS ACTIONS
+   ============================================================ */
+
+.message.assistant-message .analysis-actions button {
+
+  background:
+    rgba(7, 29, 21, 0.72) !important;
+
+  border:
+    1px solid rgba(99, 243, 162, 0.20) !important;
+
+  color:
+    rgba(234, 247, 240, 0.85) !important;
+
+  box-shadow: none !important;
+
+  text-shadow: none !important;
+}
+
+
+.message.assistant-message .analysis-actions button:hover {
+
+  border-color:
+    rgba(99, 243, 162, 0.42) !important;
+
+  background:
+    rgba(15, 45, 32, 0.84) !important;
+}
+
+
+/* ============================================================
+   SUBTLE CONTENT SEPARATION
+   ============================================================ */
+
+.message.assistant-message .analysis-block
++ .analysis-block {
+
+  margin-top: 10px;
+}
+
+
+.message.assistant-message .ai-insights
++ .follow-up-actions {
+
+  margin-top: 12px;
+}
+
+
+/* ============================================================
+   SCROLLBAR — ONLY INSIDE MESSAGE AREAS IF PRESENT
+   ============================================================ */
+
+.messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+
+.messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+.messages::-webkit-scrollbar-thumb {
+
+  background:
+    rgba(99, 243, 162, 0.16);
+
+  border-radius: 999px;
+}
+
+
+.messages::-webkit-scrollbar-thumb:hover {
+
+  background:
+    rgba(99, 243, 162, 0.27);
+}
+
+
+/* ============================================================
+   MICRO INTERACTIONS
+   No layout changes
+   ============================================================ */
+
+.message.assistant-message .analysis-block,
+.message.assistant-message .ai-insights,
+.message.assistant-message .verification-block,
+.message.assistant-message .sources-block {
+
+  animation:
+    bsiPanelReveal 180ms ease-out both;
+}
+
+
+@keyframes bsiPanelReveal {
+
+  from {
+    opacity: 0.82;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+}
+
+
+/* Respect reduced-motion preference */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .message.assistant-message .analysis-block,
+  .message.assistant-message .ai-insights,
+  .message.assistant-message .verification-block,
+  .message.assistant-message .sources-block {
+
+    animation: none !important;
+    transition: none !important;
+  }
+
+}
+
+
+/* ============================================================
+   MOBILE SAFE POLISH
+   No width changes
+   ============================================================ */
+
+@media (max-width: 700px) {
+
+  .message.assistant-message .analysis-block,
+  .message.assistant-message .ai-insights,
+  .message.assistant-message .verification-block,
+  .message.assistant-message .sources-block {
+
+    border-radius: 11px !important;
+  }
+
+
+  .message.assistant-message .follow-up-actions {
+
+    gap: 6px !important;
+  }
+
+
+  .message.assistant-message .follow-up-actions button {
+
+    box-shadow: none !important;
+  }
+
+}
+
+
+/* ============================================================
+   FINAL VISUAL CLEANUP
+   ============================================================ */
+
+.message.assistant-message .message-bubble,
+.message.assistant-message .analysis-block,
+.message.assistant-message .ai-insights,
+.message.assistant-message .verification-score,
+.message.assistant-message .verification-block,
+.message.assistant-message .sources-block,
+.message.assistant-message details {
+
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/* Remove excessive glow specifically inside analysis output */
+
+.message.assistant-message .analysis-block *,
+.message.assistant-message .ai-insights *,
+.message.assistant-message .verification-block *,
+.message.assistant-message .sources-block * {
+
+  text-shadow: none !important;
+}
