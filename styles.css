@@ -923,3 +923,174 @@ font-weight:600;
   border-color: #8dffb2;
   background: rgba(80, 255, 140, 0.17);
 }
+/* =========================================================
+   BONDSTATS AI — INSTITUTIONAL TERMINAL UI UPGRADE
+   Frontend only — API untouched
+   ========================================================= */
+
+.message.assistant-message .message-bubble {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(17, 58, 42, 0.72),
+      rgba(7, 24, 19, 0.92)
+    );
+  border: 1px solid rgba(84, 255, 161, 0.32);
+  border-radius: 22px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  padding: 28px;
+}
+
+/* Main answer becomes the visual focal point */
+.message.assistant-message .message-bubble > p:first-of-type {
+  font-size: 1.22rem;
+  line-height: 1.55;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  margin-bottom: 22px;
+}
+
+/* Section cards */
+.analysis-block,
+.ai-insights,
+.verification-block,
+.sources-block {
+  background: rgba(4, 19, 15, 0.55);
+  border: 1px solid rgba(90, 255, 165, 0.18);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-top: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+}
+
+/* Section labels */
+.analysis-block h3,
+.analysis-block h4,
+.ai-insights h3,
+.ai-insights h4 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: #6cffad;
+  margin-bottom: 10px;
+}
+
+/* Better body typography */
+.analysis-block p,
+.ai-insights li,
+.message-bubble p {
+  line-height: 1.62;
+}
+
+/* AI insight list */
+.ai-insights ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+}
+
+.ai-insights li {
+  padding-left: 3px;
+}
+
+/* Follow-up buttons become compact terminal actions */
+.follow-up-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.follow-up-actions button {
+  background: rgba(12, 42, 31, 0.78);
+  border: 1px solid rgba(89, 255, 160, 0.42);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.follow-up-actions button:hover {
+  transform: translateY(-1px);
+  background: rgba(24, 70, 50, 0.9);
+  border-color: rgba(110, 255, 177, 0.72);
+}
+
+/* Confidence becomes more compact */
+.verification-score {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-width: 0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  margin-top: 12px;
+  background: rgba(13, 46, 34, 0.8);
+  border: 1px solid rgba(90, 255, 165, 0.24);
+}
+
+/* Details: cleaner, less visual noise */
+details {
+  background: rgba(2, 13, 10, 0.38);
+  border: 1px solid rgba(85, 255, 160, 0.12);
+  border-radius: 13px;
+  padding: 12px 15px;
+  margin-top: 8px;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: rgba(240, 255, 247, 0.94);
+}
+
+details[open] {
+  background: rgba(3, 19, 14, 0.58);
+}
+
+/* Mechanism should feel analytical instead of like another giant box */
+.analysis-block[data-section="mechanism"],
+.mechanism-block {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 0.92rem;
+}
+
+/* Desktop spacing */
+@media (min-width: 900px) {
+  .message.assistant-message .message-bubble {
+    padding: 30px 32px;
+  }
+
+  .analysis-block {
+    margin-top: 12px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  .message.assistant-message .message-bubble {
+    padding: 20px 17px;
+    border-radius: 18px;
+  }
+
+  .message.assistant-message .message-bubble > p:first-of-type {
+    font-size: 1.08rem;
+  }
+
+  .follow-up-actions button {
+    width: 100%;
+    text-align: left;
+  }
+}
