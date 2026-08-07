@@ -1094,3 +1094,752 @@ details[open] {
     text-align: left;
   }
 }
+/* ============================================================
+   BONDSTATS AI — INSTITUTIONAL TERMINAL UI V2
+   CSS ONLY — API / SUPABASE / JAVASCRIPT UNTOUCHED
+   ============================================================ */
+
+:root {
+  --bs-bg: #07110e;
+  --bs-panel: rgba(10, 28, 22, 0.94);
+  --bs-panel-2: rgba(8, 22, 18, 0.88);
+  --bs-panel-soft: rgba(13, 35, 27, 0.72);
+
+  --bs-border: rgba(104, 255, 170, 0.18);
+  --bs-border-strong: rgba(104, 255, 170, 0.38);
+
+  --bs-green: #66f6a7;
+  --bs-green-soft: rgba(102, 246, 167, 0.10);
+  --bs-green-glow: rgba(102, 246, 167, 0.18);
+
+  --bs-text: #f3f8f5;
+  --bs-text-2: rgba(243, 248, 245, 0.78);
+  --bs-text-3: rgba(243, 248, 245, 0.52);
+
+  --bs-radius-xl: 24px;
+  --bs-radius-lg: 18px;
+  --bs-radius-md: 13px;
+}
+
+
+/* ============================================================
+   1. MAIN CHAT AREA
+   Less glow, more Bloomberg / institutional terminal
+   ============================================================ */
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 24px !important;
+}
+
+.message {
+  width: 100%;
+}
+
+.message.assistant-message {
+  align-items: flex-start;
+}
+
+.message.user-message {
+  align-items: flex-end;
+}
+
+
+/* ============================================================
+   2. ASSISTANT RESPONSE CARD
+   ============================================================ */
+
+.message.assistant-message .message-bubble {
+  position: relative;
+
+  width: min(100%, 980px);
+  max-width: 980px;
+
+  padding: 0 !important;
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 40, 30, 0.96),
+      rgba(6, 20, 16, 0.98)
+    ) !important;
+
+  border: 1px solid var(--bs-border-strong) !important;
+  border-radius: var(--bs-radius-xl) !important;
+
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+
+  color: var(--bs-text);
+}
+
+
+/* Subtle terminal accent line */
+
+.message.assistant-message .message-bubble::before {
+  content: "";
+  display: block;
+  height: 3px;
+  width: 100%;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(102, 246, 167, 0.85) 18%,
+      rgba(102, 246, 167, 0.35) 62%,
+      transparent 100%
+    );
+
+  opacity: 0.85;
+}
+
+
+/* ============================================================
+   3. SPEAKER / BRAND
+   ============================================================ */
+
+.message-speaker {
+  display: block;
+
+  padding: 22px 28px 5px 28px !important;
+
+  font-size: 0.69rem !important;
+  line-height: 1 !important;
+
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+
+  font-weight: 800 !important;
+  color: var(--bs-green) !important;
+}
+
+
+/* ============================================================
+   4. MAIN ANSWER
+   Make conclusion the strongest visual element
+   ============================================================ */
+
+.message.assistant-message .message-bubble > p,
+.message.assistant-message .message-bubble > .answer,
+.message.assistant-message .message-bubble > .answer-text {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.message.assistant-message .message-bubble > p:first-of-type {
+  margin: 8px 0 22px 0 !important;
+
+  font-size: clamp(1.15rem, 1.7vw, 1.38rem) !important;
+  line-height: 1.48 !important;
+
+  font-weight: 680 !important;
+  letter-spacing: -0.022em;
+
+  color: #ffffff !important;
+}
+
+
+/* Important numbers visually stronger */
+
+.message.assistant-message strong {
+  color: #ffffff;
+  font-weight: 760;
+}
+
+
+/* ============================================================
+   5. AI AVATAR
+   Small, clean, less neon toy-like
+   ============================================================ */
+
+.assistant-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+
+  display: grid !important;
+  place-items: center;
+
+  border-radius: 12px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(103, 246, 167, 0.95),
+      rgba(63, 205, 127, 0.78)
+    ) !important;
+
+  color: #062016 !important;
+
+  font-size: 0.67rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em;
+
+  border: 1px solid rgba(174, 255, 208, 0.42);
+
+  box-shadow:
+    0 8px 25px rgba(76, 236, 145, 0.17) !important;
+}
+
+
+/* ============================================================
+   6. USER MESSAGE
+   Cleaner and less fluorescent
+   ============================================================ */
+
+.message.user-message .message-bubble {
+  max-width: 72%;
+
+  padding: 15px 20px !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(97, 246, 164, 0.94),
+      rgba(68, 211, 137, 0.91)
+    ) !important;
+
+  color: #052116 !important;
+
+  border: 1px solid rgba(185, 255, 216, 0.45) !important;
+  border-radius: 20px 20px 6px 20px !important;
+
+  box-shadow:
+    0 12px 30px rgba(51, 220, 126, 0.12) !important;
+
+  font-weight: 580;
+  line-height: 1.5;
+}
+
+.message.user-message .message-speaker {
+  padding: 0 0 6px 2px !important;
+  color: rgba(7, 42, 26, 0.67) !important;
+}
+
+
+/* ============================================================
+   7. AI INSIGHTS
+   Turn the list into compact research rows
+   ============================================================ */
+
+.ai-insights {
+  margin: 8px 20px 10px 20px !important;
+  padding: 18px 20px !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(16, 49, 36, 0.75),
+      rgba(8, 28, 21, 0.74)
+    ) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.20) !important;
+  border-radius: var(--bs-radius-lg) !important;
+
+  box-shadow: none !important;
+}
+
+.ai-insights h3,
+.ai-insights h4 {
+  margin: 0 0 13px 0 !important;
+
+  color: var(--bs-green) !important;
+
+  font-size: 0.68rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 850;
+}
+
+.ai-insights ul {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+
+  display: grid;
+  gap: 7px !important;
+}
+
+.ai-insights li {
+  position: relative;
+
+  margin: 0 !important;
+  padding: 9px 12px 9px 36px !important;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.022);
+
+  color: rgba(244, 250, 246, 0.90) !important;
+
+  line-height: 1.46 !important;
+  font-size: 0.93rem !important;
+}
+
+.ai-insights li::before {
+  content: "↗";
+
+  position: absolute;
+  left: 13px;
+  top: 8px;
+
+  color: var(--bs-green);
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+
+/* ============================================================
+   8. ANALYSIS CARDS
+   Why / Mechanism / Countercase / Change
+   ============================================================ */
+
+.analysis-block {
+  position: relative;
+
+  margin: 10px 20px !important;
+  padding: 17px 19px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(8, 27, 20, 0.78),
+      rgba(5, 19, 15, 0.76)
+    ) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.14) !important;
+  border-radius: var(--bs-radius-md) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.022) !important;
+
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.analysis-block:hover {
+  transform: translateY(-1px);
+
+  border-color: rgba(102, 246, 167, 0.26) !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(12, 37, 27, 0.84),
+      rgba(6, 23, 17, 0.82)
+    ) !important;
+}
+
+.analysis-block h3,
+.analysis-block h4 {
+  margin: 0 0 8px 0 !important;
+
+  font-size: 0.65rem !important;
+  line-height: 1.1 !important;
+
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+
+  color: var(--bs-green) !important;
+  font-weight: 850 !important;
+}
+
+.analysis-block p {
+  margin: 0 !important;
+
+  font-size: 0.93rem !important;
+  line-height: 1.55 !important;
+
+  color: rgba(243, 248, 245, 0.88) !important;
+}
+
+
+/* ============================================================
+   9. MECHANISM
+   Make calculations look like terminal output
+   ============================================================ */
+
+.analysis-block[data-section="mechanism"],
+.mechanism-block {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(3, 15, 12, 0.94),
+      rgba(7, 24, 18, 0.92)
+    ) !important;
+
+  border-color: rgba(102, 246, 167, 0.20) !important;
+}
+
+.analysis-block[data-section="mechanism"] p,
+.mechanism-block p {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace !important;
+
+  font-size: 0.86rem !important;
+  line-height: 1.58 !important;
+
+  color: rgba(226, 244, 234, 0.89) !important;
+}
+
+
+/* ============================================================
+   10. FOLLOW-UP QUESTIONS
+   Compact action bar instead of huge bubbles
+   ============================================================ */
+
+.follow-up-actions {
+  margin: 16px 20px 12px 20px !important;
+
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 7px !important;
+}
+
+.follow-up-actions::before {
+  content: "NEXT ANALYSIS";
+
+  flex-basis: 100%;
+
+  margin-bottom: 2px;
+
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+
+  color: rgba(102, 246, 167, 0.68);
+}
+
+.follow-up-actions button {
+  min-height: 0 !important;
+
+  padding: 8px 13px !important;
+
+  border-radius: 999px !important;
+
+  background: rgba(10, 35, 26, 0.76) !important;
+
+  border:
+    1px solid rgba(102, 246, 167, 0.26) !important;
+
+  color: rgba(239, 250, 244, 0.88) !important;
+
+  font-size: 0.76rem !important;
+  line-height: 1.25 !important;
+
+  font-weight: 620 !important;
+
+  box-shadow: none !important;
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease !important;
+}
+
+.follow-up-actions button:hover {
+  transform: translateY(-1px) !important;
+
+  background: rgba(27, 68, 49, 0.86) !important;
+
+  border-color:
+    rgba(102, 246, 167, 0.56) !important;
+}
+
+
+/* ============================================================
+   11. CONFIDENCE
+   Turn giant confidence card into terminal badge
+   ============================================================ */
+
+.verification-score {
+  width: fit-content !important;
+
+  margin: 12px 20px !important;
+  padding: 7px 12px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+
+  background: rgba(102, 246, 167, 0.07) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.24) !important;
+
+  border-radius: 999px !important;
+
+  box-shadow: none !important;
+
+  font-size: 0.77rem !important;
+  font-weight: 730 !important;
+}
+
+
+/* ============================================================
+   12. DETAILS / ASSUMPTIONS / FACTS / UNKNOWNS
+   ============================================================ */
+
+.message.assistant-message details {
+  margin: 6px 20px !important;
+  padding: 0 !important;
+
+  overflow: hidden;
+
+  background: rgba(3, 16, 12, 0.47) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.10) !important;
+
+  border-radius: 11px !important;
+
+  box-shadow: none !important;
+}
+
+.message.assistant-message details summary {
+  position: relative;
+
+  padding: 11px 14px !important;
+
+  list-style: none;
+
+  cursor: pointer;
+
+  color: rgba(243, 248, 245, 0.78) !important;
+
+  font-size: 0.82rem !important;
+  font-weight: 660 !important;
+
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.message.assistant-message details summary:hover {
+  background: rgba(102, 246, 167, 0.04);
+
+  color: #ffffff !important;
+}
+
+.message.assistant-message details[open] {
+  background: rgba(5, 21, 16, 0.72) !important;
+}
+
+.message.assistant-message details[open] summary {
+  border-bottom:
+    1px solid rgba(102, 246, 167, 0.09);
+}
+
+
+/* ============================================================
+   13. SOURCES / VERIFICATION
+   ============================================================ */
+
+.verification-block,
+.sources-block {
+  margin: 8px 20px !important;
+  padding: 14px 16px !important;
+
+  background: rgba(3, 17, 13, 0.52) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.11) !important;
+
+  border-radius: 12px !important;
+
+  box-shadow: none !important;
+
+  color: var(--bs-text-2);
+}
+
+
+/* ============================================================
+   14. LAST ITEM SPACING
+   ============================================================ */
+
+.message.assistant-message .message-bubble > *:last-child {
+  margin-bottom: 20px !important;
+}
+
+
+/* ============================================================
+   15. CHAT INPUT
+   Give input a floating terminal-console feel
+   ============================================================ */
+
+form {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+form input,
+form textarea {
+  background: rgba(4, 17, 13, 0.92) !important;
+
+  border: 1px solid rgba(102, 246, 167, 0.24) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.025) !important;
+
+  color: #f6fbf8 !important;
+}
+
+form input:focus,
+form textarea:focus {
+  outline: none !important;
+
+  border-color:
+    rgba(102, 246, 167, 0.58) !important;
+
+  box-shadow:
+    0 0 0 3px rgba(102, 246, 167, 0.07) !important;
+}
+
+
+/* ============================================================
+   16. BUTTONS
+   Less glow, more premium
+   ============================================================ */
+
+form button {
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 8px 22px rgba(65, 225, 137, 0.12) !important;
+
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease !important;
+}
+
+form button:hover {
+  transform: translateY(-1px);
+
+  filter: brightness(1.04);
+
+  box-shadow:
+    0 10px 26px rgba(65, 225, 137, 0.18) !important;
+}
+
+
+/* ============================================================
+   17. REDUCE EXCESSIVE NEON GLOW
+   ============================================================ */
+
+.message-bubble,
+.analysis-block,
+.ai-insights,
+.follow-up-actions button,
+details {
+  text-shadow: none !important;
+}
+
+.message.assistant-message * {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+
+/* ============================================================
+   18. DESKTOP LAYOUT
+   ============================================================ */
+
+@media (min-width: 1000px) {
+
+  .messages {
+    gap: 28px !important;
+  }
+
+  .message.assistant-message .message-bubble {
+    width: min(100%, 1020px);
+  }
+
+  .message.assistant-message .message-bubble > p:first-of-type {
+    max-width: 900px;
+  }
+
+}
+
+
+/* ============================================================
+   19. MOBILE
+   ============================================================ */
+
+@media (max-width: 700px) {
+
+  .message.assistant-message .message-bubble {
+    width: 100%;
+    border-radius: 18px !important;
+  }
+
+  .message-speaker {
+    padding:
+      18px 17px 5px 17px !important;
+  }
+
+  .message.assistant-message .message-bubble > p,
+  .message.assistant-message .message-bubble > .answer,
+  .message.assistant-message .message-bubble > .answer-text {
+    padding-left: 17px !important;
+    padding-right: 17px !important;
+  }
+
+  .message.assistant-message .message-bubble > p:first-of-type {
+    font-size: 1.08rem !important;
+  }
+
+  .ai-insights,
+  .analysis-block,
+  .follow-up-actions,
+  .verification-block,
+  .sources-block {
+    margin-left: 12px !important;
+    margin-right: 12px !important;
+  }
+
+  .message.assistant-message details {
+    margin-left: 12px !important;
+    margin-right: 12px !important;
+  }
+
+  .message.user-message .message-bubble {
+    max-width: 88%;
+  }
+
+  .follow-up-actions button {
+    width: auto !important;
+    flex: 1 1 46%;
+  }
+
+}
+
+
+/* ============================================================
+   20. FINAL POLISH
+   ============================================================ */
+
+.message.assistant-message .message-bubble {
+  animation: bondstatsCardIn 260ms ease-out both;
+}
+
+@keyframes bondstatsCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
