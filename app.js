@@ -1256,11 +1256,54 @@ function buildAIInsightsBlock(data) {
       maxValue += 1;
     }
 
-    const range =
-      maxValue - minValue;
+    const crossesZero =
+  minValue < 0 &&
+  maxValue > 0;
 
-    minValue -= range * 0.12;
-    maxValue += range * 0.12;
+if (crossesZero) {
+  const maxAbs = Math.max(
+    Math.abs(minValue),
+    Math.abs(maxValue)
+  );
+
+  const magnitude = Math.pow(
+    10,
+    Math.floor(
+      Math.log10(
+        Math.max(maxAbs, 0.0001)
+      )
+    )
+  );
+
+  const normalized =
+    maxAbs / magnitude;
+
+  let niceNormalized;
+
+  if (normalized <= 1) {
+    niceNormalized = 1;
+  } else if (normalized <= 2) {
+    niceNormalized = 2;
+  } else if (normalized <= 4) {
+    niceNormalized = 4;
+  } else if (normalized <= 8) {
+    niceNormalized = 8;
+  } else {
+    niceNormalized = 10;
+  }
+
+  const axisLimit =
+    niceNormalized * magnitude;
+
+  minValue = -axisLimit;
+  maxValue = axisLimit;
+} else {
+  const range =
+    maxValue - minValue;
+
+  minValue -= range * 0.08;
+  maxValue += range * 0.08;
+}
 
     const getX = index =>
       padding.left +
