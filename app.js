@@ -1084,7 +1084,229 @@ function buildAIInsightsBlock(data) {
   </div>
 `;
 }
-  
+  function buildChartsBlock(data) {
+  const charts = Array.isArray(data?.charts)
+    ? data.charts.filter(chart =>
+        chart &&
+        typeof chart === "object" &&
+        Array.isArray(chart.labels) &&
+        chart.labels.length > 0 &&
+        Array.isArray(chart.series) &&
+        chart.series.length > 0
+      )
+    : [];
+
+  if (charts.length === 0) {
+    return "";
+  }
+
+  return `
+    <section class="bondstats-charts">
+      <div class="bondstats-charts-header">
+        <span>MARKET VISUALIZATION</span>
+      </div>
+
+      ${charts.map((chart, index) => {
+        const chartId =
+          `bondstats-chart-${Date.now()}-${index}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+
+        return `
+          <article class="bondstats-chart-card">
+            <div class="bondstats-chart-heading">
+              <div>
+                <strong>
+                  ${escapeHTML(
+                    safeText(chart.title, "Market Analysis")
+                  )}
+                </strong>
+
+                ${
+                  chart.subtitle
+                    ? `<p>${escapeHTML(
+                        safeText(chart.subtitle, "")
+                      )}</p>`
+                    : ""
+                }
+              </div>
+
+              ${
+                chart.unit
+                  ? `<span class="bondstats-chart-unit">
+                      ${escapeHTML(
+                        safeText(chart.unit, "")
+                      )}
+                    </span>`
+                  : ""
+              }
+            </div>
+
+            <div class="bondstats-chart-canvas-wrap">
+              <canvas
+                id="${chartId}"
+                class="bondstats-chart-canvas"
+                data-chart-index="${index}"
+              ></canvas>
+            </div>
+
+            ${
+              chart.note
+                ? `<div class="bondstats-chart-note">
+                    ${escapeHTML(
+                      safeText(chart.note, "")
+                    )}
+                  </div>`
+                : ""
+            }
+          </article>
+        `;
+      }).join("")}
+    </section>
+  `;
+}
+  function renderBondStatsCharts(data) {
+  if (
+    typeof Chart === "undefined" ||
+    !Array.isArray(data?.charts) ||
+    data.charts.length === 0
+  ) {
+    return;
+  }
+
+  const canvases =
+    messages.querySelectorAll(
+      ".bondstats-chart-canvas"
+    );
+
+  const relevantCanvases =
+    Array.from(canvases).slice(
+      -data.charts.length
+    );
+
+  relevantCanvases.forEach(
+    (canvas, index) => {
+      const chartData =
+        data.charts[index];
+
+      if (
+        !chartData ||
+        !Array.isArray(chartData.labels) ||
+        !Array.isArray(chartData.series)
+      ) {
+        return;
+      }
+
+      const datasets =
+        chartData.series.map(
+          series => ({
+            label:
+              safeText(
+                series?.name,
+                "Series"
+              ),
+
+            data:
+              Array.isArray(series?.values)
+                ? series.values.map(value =>
+                    Number(value)
+                  )
+                : [],
+
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            tension: 0.28,
+            fill: false
+          })
+        );
+
+      new Chart(
+        canvas.getContext("2d"),
+        {
+          type:
+            chartData.type === "bar"
+              ? "bar"
+              : "line",
+
+          data: {
+            labels:
+              chartData.labels.map(
+                label =>
+                  safeText(label, "")
+              ),
+
+            datasets
+          },
+
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+
+            interaction: {
+              mode: "index",
+              intersect: false
+            },
+
+            plugins: {
+              legend: {
+                display: true,
+
+                labels: {
+                  color:
+                    "rgba(235,255,242,0.86)",
+                  boxWidth: 12,
+                  boxHeight: 12
+                }
+              },
+
+              tooltip: {
+                enabled: true
+              }
+            },
+
+            scales: {
+              x: {
+                ticks: {
+                  color:
+                    "rgba(225,255,235,0.72)"
+                },
+
+                grid: {
+                  color:
+                    "rgba(120,255,165,0.08)"
+                }
+              },
+
+              y: {
+                ticks: {
+                  color:
+                    "rgba(225,255,235,0.72)",
+
+                  callback(value) {
+                    if (
+                      chartData.unit &&
+                      chartData.unit.includes("%")
+                    ) {
+                      return `${value}%`;
+                    }
+
+                    return value;
+                  }
+                },
+
+                grid: {
+                  color:
+                    "rgba(120,255,165,0.10)"
+                }
+              }
+            }
+          }
+        }
+      );
+    }
+  );
+}
   function addAssistantMessage(data) {
     removeTypingIndicator();
 
@@ -1158,6 +1380,8 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
 
             ${buildAIInsightsBlock(data)}
 
+            ${buildChartsBlock(data)}
+
             <div class="analysis-grid">
               ${buildAnalysisBlocks(data)}
             </div>
@@ -1192,7 +1416,10 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
         </article>
       `
     );
+    );
 
+    renderBondStatsCharts(data);
+    
     scrollToBottom();
   }
 
