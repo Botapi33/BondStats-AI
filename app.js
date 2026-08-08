@@ -1432,18 +1432,6 @@ if (
 
   ctx.stroke();
 
-  ctx.fillStyle =
-    "rgba(225, 255, 235, 0.85)";
-  ctx.font =
-    "11px Arial, sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "bottom";
-
-  ctx.fillText(
-    "0%",
-    padding.left + 6,
-    zeroY - 5
-  );
 }
 
 /* X labels */
