@@ -1314,17 +1314,17 @@ for (let step = 0; step <= gridSteps; step++) {
     padding.top +
     fraction * plotHeight;
 
-  const isZero =
+  const is =
     Math.abs(value) <
     (maxValue - minValue) * 0.08;
 
   ctx.beginPath();
 
-  ctx.strokeStyle = isZero
+  ctx.strokeStyle = is
     ? "rgba(120, 255, 165, 0.30)"
     : "rgba(120, 255, 165, 0.075)";
 
-  ctx.lineWidth = isZero ? 1.4 : 1;
+  ctx.lineWidth = is ? 1.4 : 1;
 
   ctx.moveTo(
     padding.left,
@@ -1348,7 +1348,7 @@ for (let step = 0; step <= gridSteps; step++) {
       ? "+"
       : "";
 
-  ctx.fillStyle = isZero
+  ctx.fillStyle = is
     ? "rgba(230, 255, 238, 0.95)"
     : "rgba(220, 245, 228, 0.66)";
 
@@ -1366,57 +1366,146 @@ for (let step = 0; step <= gridSteps; step++) {
 
     /* Zero line */
 
-    if (
-      minValue < 0 &&
-      maxValue > 0
-    ) {
-      const zeroY =
-        getY(0);
+if (
+  minValue < 0 &&
+  maxValue > 0
+) {
+  const zeroY = getY(0);
 
-      ctx.beginPath();
+  ctx.beginPath();
+  ctx.strokeStyle =
+    "rgba(122, 255, 171, 0.42)";
+  ctx.lineWidth = 1.5;
 
-      ctx.strokeStyle =
-        "rgba(124, 255, 170, 0.38)";
+  ctx.moveTo(
+    padding.left,
+    zeroY
+  );
 
-      ctx.lineWidth = 1.4;
+  ctx.lineTo(
+    width - padding.right,
+    zeroY
+  );
 
-      ctx.moveTo(
-        padding.left,
-        zeroY
-      );
+  ctx.stroke();
 
-      ctx.lineTo(
-        width - padding.right,
-        zeroY
-      );
+  ctx.fillStyle =
+    "rgba(225, 255, 235, 0.85)";
+  ctx.font =
+    "11px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
 
-      ctx.stroke();
+  ctx.fillText(
+    "0%",
+    padding.left + 6,
+    zeroY - 5
+  );
+}
+
+/* X labels */
+
+ctx.font =
+  "11px Arial, sans-serif";
+
+ctx.fillStyle =
+  "rgba(220, 245, 228, 0.68)";
+
+ctx.textAlign = "center";
+ctx.textBaseline = "top";
+
+chart.labels.forEach(
+  (label, i) => {
+    const x = getX(i);
+
+    ctx.fillText(
+      String(label),
+      x,
+      height -
+        padding.bottom +
+        18
+    );
+  }
+);
+
+/* Axis caption */
+
+ctx.fillStyle =
+  "rgba(200, 235, 212, 0.48)";
+ctx.font =
+  "10px Arial, sans-serif";
+ctx.textAlign = "center";
+
+ctx.fillText(
+  "Yield shock",
+  padding.left +
+    plotWidth / 2,
+  height - 10
+);
+
+/* Line */
+
+ctx.beginPath();
+
+values.forEach(
+  (value, i) => {
+    const x = getX(i);
+    const y = getY(value);
+
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
     }
+  }
+);
 
-    /* X labels */
+ctx.strokeStyle =
+  "rgba(113, 255, 159, 0.98)";
+
+ctx.lineWidth = 2.4;
+
+ctx.lineJoin = "round";
+ctx.lineCap = "round";
+
+ctx.shadowColor =
+  "rgba(113, 255, 159, 0.24)";
+ctx.shadowBlur = 7;
+
+ctx.stroke();
+
+ctx.shadowBlur = 0;
+
+/* Points */
+
+values.forEach(
+  (value, i) => {
+    const x = getX(i);
+    const y = getY(value);
+
+    ctx.beginPath();
+
+    ctx.arc(
+      x,
+      y,
+      3.6,
+      0,
+      Math.PI * 2
+    );
 
     ctx.fillStyle =
-      "rgba(225, 255, 235, 0.70)";
+      "rgba(154, 255, 184, 1)";
 
-    ctx.font =
-      "11px Arial, sans-serif";
+    ctx.fill();
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+    ctx.strokeStyle =
+      "rgba(7, 35, 25, 0.95)";
 
-    chart.labels.forEach(
-      (label, i) => {
-        const x = getX(i);
+    ctx.lineWidth = 1.6;
 
-        ctx.fillText(
-          String(label),
-          x,
-          height -
-            padding.bottom +
-            14
-        );
-      }
-    );
+    ctx.stroke();
+  }
+);
 
     /* Line */
 
