@@ -1167,145 +1167,308 @@ function buildAIInsightsBlock(data) {
 }
   function renderBondStatsCharts(data) {
   if (
-    typeof Chart === "undefined" ||
     !Array.isArray(data?.charts) ||
     data.charts.length === 0
   ) {
     return;
   }
 
-  const canvases =
-    messages.querySelectorAll(
-      ".bondstats-chart-canvas"
+  const canvases = Array.from(
+    messages.querySelectorAll(".bondstats-chart-canvas")
+  ).slice(-data.charts.length);
+
+  canvases.forEach((canvas, index) => {
+    const chart = data.charts[index];
+
+    if (
+      !chart ||
+      !Array.isArray(chart.labels) ||
+      !Array.isArray(chart.series) ||
+      chart.series.length === 0
+    ) {
+      return;
+    }
+
+    const series = chart.series[0];
+
+    if (!Array.isArray(series?.values)) {
+      return;
+    }
+
+    const values = series.values
+      .map(Number)
+      .filter(Number.isFinite);
+
+    if (values.length === 0) {
+      return;
+    }
+
+    const container = canvas.parentElement;
+
+    const width =
+      Math.max(
+        620,
+        container?.clientWidth || 620
+      );
+
+    const height = 320;
+
+    const ratio =
+      window.devicePixelRatio || 1;
+
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    canvas.style.maxWidth = "100%";
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      return;
+    }
+
+    ctx.scale(ratio, ratio);
+
+    const padding = {
+      top: 28,
+      right: 28,
+      bottom: 52,
+      left: 64
+    };
+
+    const plotWidth =
+      width -
+      padding.left -
+      padding.right;
+
+    const plotHeight =
+      height -
+      padding.top -
+      padding.bottom;
+
+    let minValue = Math.min(...values);
+    let maxValue = Math.max(...values);
+
+    if (minValue === maxValue) {
+      minValue -= 1;
+      maxValue += 1;
+    }
+
+    const range =
+      maxValue - minValue;
+
+    minValue -= range * 0.12;
+    maxValue += range * 0.12;
+
+    const getX = index =>
+      padding.left +
+      (
+        index /
+        Math.max(values.length - 1, 1)
+      ) * plotWidth;
+
+    const getY = value =>
+      padding.top +
+      (
+        1 -
+        (value - minValue) /
+        (maxValue - minValue)
+      ) * plotHeight;
+
+    ctx.clearRect(
+      0,
+      0,
+      width,
+      height
     );
 
-  const relevantCanvases =
-    Array.from(canvases).slice(
-      -data.charts.length
+    /* Background */
+
+    ctx.fillStyle =
+      "rgba(4, 28, 20, 0.45)";
+
+    ctx.fillRect(
+      0,
+      0,
+      width,
+      height
     );
 
-  relevantCanvases.forEach(
-    (canvas, index) => {
-      const chartData =
-        data.charts[index];
+    /* Horizontal grid */
 
-      if (
-        !chartData ||
-        !Array.isArray(chartData.labels) ||
-        !Array.isArray(chartData.series)
-      ) {
-        return;
-      }
+    ctx.lineWidth = 1;
+    ctx.font =
+      "12px Arial, sans-serif";
 
-      const datasets =
-        chartData.series.map(
-          series => ({
-            label:
-              safeText(
-                series?.name,
-                "Series"
-              ),
+    for (
+      let step = 0;
+      step <= 5;
+      step++
+    ) {
+      const fraction =
+        step / 5;
 
-            data:
-              Array.isArray(series?.values)
-                ? series.values.map(value =>
-                    Number(value)
-                  )
-                : [],
+      const value =
+        maxValue -
+        fraction *
+          (maxValue - minValue);
 
-            borderWidth: 2,
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            tension: 0.28,
-            fill: false
-          })
-        );
+      const y =
+        padding.top +
+        fraction * plotHeight;
 
-      new Chart(
-        canvas.getContext("2d"),
-        {
-          type:
-            chartData.type === "bar"
-              ? "bar"
-              : "line",
+      ctx.beginPath();
 
-          data: {
-            labels:
-              chartData.labels.map(
-                label =>
-                  safeText(label, "")
-              ),
+      ctx.strokeStyle =
+        "rgba(112, 255, 164, 0.10)";
 
-            datasets
-          },
+      ctx.moveTo(
+        padding.left,
+        y
+      );
 
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
+      ctx.lineTo(
+        width - padding.right,
+        y
+      );
 
-            interaction: {
-              mode: "index",
-              intersect: false
-            },
+      ctx.stroke();
 
-            plugins: {
-              legend: {
-                display: true,
+      ctx.fillStyle =
+        "rgba(225, 255, 235, 0.68)";
 
-                labels: {
-                  color:
-                    "rgba(235,255,242,0.86)",
-                  boxWidth: 12,
-                  boxHeight: 12
-                }
-              },
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
 
-              tooltip: {
-                enabled: true
-              }
-            },
-
-            scales: {
-              x: {
-                ticks: {
-                  color:
-                    "rgba(225,255,235,0.72)"
-                },
-
-                grid: {
-                  color:
-                    "rgba(120,255,165,0.08)"
-                }
-              },
-
-              y: {
-                ticks: {
-                  color:
-                    "rgba(225,255,235,0.72)",
-
-                  callback(value) {
-                    if (
-                      chartData.unit &&
-                      chartData.unit.includes("%")
-                    ) {
-                      return `${value}%`;
-                    }
-
-                    return value;
-                  }
-                },
-
-                grid: {
-                  color:
-                    "rgba(120,255,165,0.10)"
-                }
-              }
-            }
-          }
-        }
+      ctx.fillText(
+        `${value.toFixed(1)}${
+          chart.unit?.includes("%")
+            ? "%"
+            : ""
+        }`,
+        padding.left - 12,
+        y
       );
     }
-  );
+
+    /* Zero line */
+
+    if (
+      minValue < 0 &&
+      maxValue > 0
+    ) {
+      const zeroY =
+        getY(0);
+
+      ctx.beginPath();
+
+      ctx.strokeStyle =
+        "rgba(124, 255, 170, 0.38)";
+
+      ctx.lineWidth = 1.4;
+
+      ctx.moveTo(
+        padding.left,
+        zeroY
+      );
+
+      ctx.lineTo(
+        width - padding.right,
+        zeroY
+      );
+
+      ctx.stroke();
+    }
+
+    /* X labels */
+
+    ctx.fillStyle =
+      "rgba(225, 255, 235, 0.70)";
+
+    ctx.font =
+      "11px Arial, sans-serif";
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    chart.labels.forEach(
+      (label, i) => {
+        const x = getX(i);
+
+        ctx.fillText(
+          String(label),
+          x,
+          height -
+            padding.bottom +
+            14
+        );
+      }
+    );
+
+    /* Line */
+
+    ctx.beginPath();
+
+    values.forEach(
+      (value, i) => {
+        const x = getX(i);
+        const y = getY(value);
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    );
+
+    ctx.strokeStyle =
+      "#71ff9f";
+
+    ctx.lineWidth = 3;
+
+    ctx.shadowColor =
+      "rgba(113, 255, 159, 0.45)";
+
+    ctx.shadowBlur = 9;
+
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    /* Points */
+
+    values.forEach(
+      (value, i) => {
+        const x = getX(i);
+        const y = getY(value);
+
+        ctx.beginPath();
+
+        ctx.arc(
+          x,
+          y,
+          4,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.fillStyle =
+          "#9affb8";
+
+        ctx.fill();
+
+        ctx.strokeStyle =
+          "rgba(5, 35, 24, 0.9)";
+
+        ctx.lineWidth = 2;
+
+        ctx.stroke();
+      }
+    );
+  });
 }
   function addAssistantMessage(data) {
     removeTypingIndicator();
