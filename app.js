@@ -1298,60 +1298,71 @@ function buildAIInsightsBlock(data) {
 
     /* Horizontal grid */
 
-    ctx.lineWidth = 1;
-    ctx.font =
-      "12px Arial, sans-serif";
+ctx.lineWidth = 1;
+ctx.font = "12px Arial, sans-serif";
 
-    for (
-      let step = 0;
-      step <= 5;
-      step++
-    ) {
-      const fraction =
-        step / 5;
+const gridSteps = 4;
 
-      const value =
-        maxValue -
-        fraction *
-          (maxValue - minValue);
+for (let step = 0; step <= gridSteps; step++) {
+  const fraction = step / gridSteps;
 
-      const y =
-        padding.top +
-        fraction * plotHeight;
+  const value =
+    maxValue -
+    fraction * (maxValue - minValue);
 
-      ctx.beginPath();
+  const y =
+    padding.top +
+    fraction * plotHeight;
 
-      ctx.strokeStyle =
-        "rgba(112, 255, 164, 0.10)";
+  const isZero =
+    Math.abs(value) <
+    (maxValue - minValue) * 0.08;
 
-      ctx.moveTo(
-        padding.left,
-        y
-      );
+  ctx.beginPath();
 
-      ctx.lineTo(
-        width - padding.right,
-        y
-      );
+  ctx.strokeStyle = isZero
+    ? "rgba(120, 255, 165, 0.30)"
+    : "rgba(120, 255, 165, 0.075)";
 
-      ctx.stroke();
+  ctx.lineWidth = isZero ? 1.4 : 1;
 
-      ctx.fillStyle =
-        "rgba(225, 255, 235, 0.68)";
+  ctx.moveTo(
+    padding.left,
+    y
+  );
 
-      ctx.textAlign = "right";
-      ctx.textBaseline = "middle";
+  ctx.lineTo(
+    width - padding.right,
+    y
+  );
 
-      ctx.fillText(
-        `${value.toFixed(1)}${
-          chart.unit?.includes("%")
-            ? "%"
-            : ""
-        }`,
-        padding.left - 12,
-        y
-      );
-    }
+  ctx.stroke();
+
+  const roundedValue =
+    Math.abs(value) < 0.05
+      ? 0
+      : value;
+
+  const sign =
+    roundedValue > 0
+      ? "+"
+      : "";
+
+  ctx.fillStyle = isZero
+    ? "rgba(230, 255, 238, 0.95)"
+    : "rgba(220, 245, 228, 0.66)";
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+
+  ctx.fillText(
+    chart.unit?.includes("%")
+      ? `${sign}${roundedValue.toFixed(1)}%`
+      : `${sign}${roundedValue.toFixed(1)}`,
+    padding.left - 14,
+    y
+  );
+}
 
     /* Zero line */
 
