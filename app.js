@@ -1416,7 +1416,6 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
         </article>
       `
     );
-    );
 
     renderBondStatsCharts(data);
     
