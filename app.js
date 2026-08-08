@@ -1231,12 +1231,12 @@ function buildAIInsightsBlock(data) {
 
     ctx.scale(ratio, ratio);
 
-    const padding = {
-      top: 28,
-      right: 28,
-      bottom: 52,
-      left: 64
-    };
+   const padding = {
+  top: 34,
+  right: 34,
+  bottom: 58,
+  left: 78
+};
 
     const plotWidth =
       width -
