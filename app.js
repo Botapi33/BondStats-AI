@@ -15,15 +15,22 @@ const SUPABASE_URL = "https://kiyuawmnmzffqlgvntbv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
+const supabaseClient =
+  window.supabase?.createClient
+    ? window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY
+      )
+    : null;
 
 let currentUser = null;
 let currentConversationId = null;
 
 async function initializeAuthAndChatPersistence() {
+  if (!supabaseClient) {
+  console.warn("Supabase client not loaded - chat continues without persistence.");
+  return;
+}
   const {
     data: { session },
     error
