@@ -23,122 +23,6 @@ const supabaseClient =
       )
     : null;
 
-let currentUser = null;
-let currentConversationId = null;
-
-async function initializeAuthAndChatPersistence() {
-  if (!supabaseClient) {
-  console.warn("Supabase client not loaded - chat continues without persistence.");
-  return;
-}
-  const {
-    data: { session },
-    error
-  } = await supabaseClient.auth.getSession();
-
-  if (error) {
-    console.error("Auth session error:", error);
-    return;
-  }
-
-  currentUser = session?.user || null;
-
-  if (currentUser) {
-    await loadLatestConversation();
-  }
-}
-
-async function createConversation(title = "New conversation") {
-  if (!currentUser) return null;
-
-  const { data, error } = await supabaseClient
-  .from("conversations")
-  .insert({
-    user_id: currentUser.id,
-    title
-  })
-  .select()
-  .single();
-
-  if (error) {
-    console.error("Create conversation failed:", error);
-    return null;
-  }
-
-  currentConversationId = data.id;
-  return data;
-}
-
-async function saveChatMessage(role, content) {
-  if (!currentUser || !content?.trim()) return;
-
-  if (!currentConversationId) {
-    const conversation = await createConversation(
-      role === "user"
-        ? content.slice(0, 60)
-        : "New conversation"
-    );
-
-    if (!conversation) return;
-  }
-
- const { error } = await supabaseClient
-  .from("messages")
-  .insert({
-    conversation_id: currentConversationId,
-    user_id: currentUser.id,
-    role,
-    content
-  });
-
-  if (error) {
-    console.error("Save message failed:", error);
-    return;
-  }
-
-  await supabaseClient
-  .from("conversations")
-  .update({
-    updated_at: new Date().toISOString()
-  })
-  .eq("id", currentConversationId);
-}
-
-async function loadLatestConversation() {
-  if (!currentUser) return;
-
-  const { data, error } = await supabaseClient
-  .from("conversations")
-    .select("id, title, updated_at")
-    .eq("user_id", currentUser.id)
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  if (error) {
-    console.error("Load latest conversation failed:", error);
-    return;
-  }
-
-  currentConversationId =
-    data && data.length > 0
-      ? data[0].id
-      : null;
-}
-
-.auth.onAuthStateChange(async (_event, session) => {
-  currentUser = session?.user || null;
-
-  if (currentUser) {
-    await loadLatestConversation();
-  } else {
-    currentConversationId = null;
-  }
-});
-
-initializeAuthAndChatPersistence();
-
-const REQUEST_TIMEOUT_MS = 45000;
-
 document.addEventListener("DOMContentLoaded", () => {
   /* =======================================================
      Find elements — supports several possible IDs/classes
@@ -2031,8 +1915,6 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
 
     addUserMessage(message);
 
-    await saveChatMessage("user", message);
-
     promptInput.value = "";
 
     resizeInput();
@@ -2052,10 +1934,6 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
 
       addAssistantMessage(data);
 
-await saveChatMessage(
-  "assistant",
-  data.answer
-);
       addToHistory(
         "assistant",
         data.answer
