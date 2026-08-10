@@ -10,6 +10,16 @@
 const SUPABASE_FUNCTION_URL =
   "https://kiyuawmnmzffqlgvntbv.supabase.co/functions/v1/swift-api";
 
+const SUPABASE_URL = "https://kiyuawmnmzffqlgvntbv.supabase.co";
+
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
 const REQUEST_TIMEOUT_MS = 45000;
 
 document.addEventListener("DOMContentLoaded", () => {
