@@ -10,18 +10,7 @@
 const SUPABASE_FUNCTION_URL =
   "https://kiyuawmnmzffqlgvntbv.supabase.co/functions/v1/swift-api";
 
-const SUPABASE_URL = "https://kiyuawmnmzffqlgvntbv.supabase.co";
-
-const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
-
-const supabaseClient =
-  window.supabase?.createClient
-    ? window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY
-      )
-    : null;
+const REQUEST_TIMEOUT_MS = 45000;
 
 document.addEventListener("DOMContentLoaded", () => {
   /* =======================================================
@@ -1614,8 +1603,6 @@ values.forEach(
 }
   function addAssistantMessage(data) {
     removeTypingIndicator();
-
-    await saveChatMessage("assistant", data.answer);
 
     const answer = safeText(
       data?.answer,
