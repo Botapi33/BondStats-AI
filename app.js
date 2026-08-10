@@ -52,13 +52,13 @@ async function createConversation(title = "New conversation") {
   if (!currentUser) return null;
 
   const { data, error } = await supabaseClient
-    .from("conversations")
-    .insert({
-      user_id: currentUser.id,
-      title
-    })
-    .select()
-    .single();
+  .from("conversations")
+  .insert({
+    user_id: currentUser.id,
+    title
+  })
+  .select()
+  .single();
 
   if (error) {
     console.error("Create conversation failed:", error);
@@ -82,14 +82,14 @@ async function saveChatMessage(role, content) {
     if (!conversation) return;
   }
 
-  const { error } = await supabaseClient
-    .from("messages")
-    .insert({
-      conversation_id: currentConversationId,
-      user_id: currentUser.id,
-      role,
-      content
-    });
+ const { error } = await supabaseClient
+  .from("messages")
+  .insert({
+    conversation_id: currentConversationId,
+    user_id: currentUser.id,
+    role,
+    content
+  });
 
   if (error) {
     console.error("Save message failed:", error);
@@ -97,18 +97,18 @@ async function saveChatMessage(role, content) {
   }
 
   await supabaseClient
-    .from("conversations")
-    .update({
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", currentConversationId);
+  .from("conversations")
+  .update({
+    updated_at: new Date().toISOString()
+  })
+  .eq("id", currentConversationId);
 }
 
 async function loadLatestConversation() {
   if (!currentUser) return;
 
   const { data, error } = await supabaseClient
-    .from("conversations")
+  .from("conversations")
     .select("id, title, updated_at")
     .eq("user_id", currentUser.id)
     .order("updated_at", { ascending: false })
@@ -125,7 +125,7 @@ async function loadLatestConversation() {
       : null;
 }
 
-supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+.auth.onAuthStateChange(async (_event, session) => {
   currentUser = session?.user || null;
 
   if (currentUser) {
