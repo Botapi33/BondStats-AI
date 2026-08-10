@@ -2045,6 +2045,10 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
 
       addAssistantMessage(data);
 
+await saveChatMessage(
+  "assistant",
+  data.answer
+);
       addToHistory(
         "assistant",
         data.answer
