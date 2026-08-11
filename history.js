@@ -1,94 +1,72 @@
 "use strict";
 
 /* ============================================================
-   BONDSTATS CHAT HISTORY
-   Version 3.0
-   ------------------------------------------------------------
+   BONDSTATS AI — CHAT HISTORY
+   Stable isolated edition
+   ============================================================
 
-   SAFE / ISOLATED MODULE
+   DESIGN RULES
+
+   - Uses the SAME Supabase client as account.js
+   - Creates NO second Supabase client
+   - Creates NO auth listener
+   - Does NOT save normal chat messages
+   - Does NOT intercept forms
+   - Does NOT intercept Enter
+   - Does NOT touch Analyze
+   - Does NOT modify app.js
+   - Does NOT modify account.js state
+   - History failures cannot stop BondStats AI
 
    FEATURES
-   ✓ User-bound Supabase history
+
+   ✓ History drawer
    ✓ Search
-   ✓ Sort by newest / oldest / title
-   ✓ Open conversations
-   ✓ Rename with custom modal
-   ✓ Delete with custom confirmation modal
-   ✓ Duplicate conversation
-   ✓ Copy conversation to clipboard
-   ✓ Export conversation as TXT
+   ✓ Sort
    ✓ Refresh
-   ✓ Open & Continue
-   ✓ Persistent selected conversation
-   ✓ Toast notifications
-   ✓ Responsive drawer
-   ✓ Does NOT modify app.js
-   ✓ Does NOT intercept Enter
-   ✓ Does NOT intercept submit
-   ✓ Does NOT alter Analyze button
+   ✓ View conversation
+   ✓ Rename
+   ✓ Delete
+   ✓ Duplicate
+   ✓ Copy
+   ✓ TXT export
+   ✓ Continue selection
+   ✓ Automatic refresh whenever History opens
    ============================================================ */
 
 (() => {
+  "use strict";
+
   try {
 
     /* ========================================================
-       CONFIG
+       INTERNAL STATE
        ======================================================== */
 
-    const SUPABASE_URL =
-      "https://kiyuawmnmzffqlgvntbv.supabase.co";
-
-    const SUPABASE_PUBLISHABLE_KEY =
-      "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
-
-
-    /* ========================================================
-       FAIL SAFE
-       ======================================================== */
-
-    if (!window.supabase?.createClient) {
-      console.warn(
-        "[BondStats History] Supabase library unavailable."
-      );
-      return;
-    }
-
-
-    /* ========================================================
-       SUPABASE CLIENT
-       ======================================================== */
-
-    const db = window.BondStatsSupabase;
-
-if (!db) {
-  console.error(
-    "[BondStats History] Shared Supabase client unavailable."
-  );
-  return;
-}
-
-
-    /* ========================================================
-       STATE
-       ======================================================== */
+    let db = null;
 
     let currentUser = null;
 
     let conversations = [];
-    let filteredConversations = [];
+
+    let visibleConversations = [];
 
     let activeConversationId = null;
-    let activeConversationMessages = [];
 
-    let currentSearch = "";
-    let currentSort = "newest";
+    let activeMessages = [];
+
+    let searchQuery = "";
+
+    let sortMode = "newest";
+
+    let toastTimer = null;
 
 
     /* ========================================================
-       HELPERS
+       BASIC HELPERS
        ======================================================== */
 
-    function safeText(value) {
+    function text(value) {
       return typeof value === "string"
         ? value.trim()
         : "";
@@ -106,11 +84,11 @@ if (!db) {
 
 
     function formatDate(value) {
-      if (!value) {
-        return "";
-      }
+
+      if (!value) return "";
 
       try {
+
         return new Intl.DateTimeFormat(
           undefined,
           {
@@ -120,2014 +98,82 @@ if (!db) {
         ).format(
           new Date(value)
         );
+
       } catch {
+
         return "";
+
       }
     }
 
 
-    function getConversationById(id) {
+    function getConversation(id) {
+
       return conversations.find(
-        item => item.id === id
+        conversation =>
+          conversation.id === id
       ) || null;
+
     }
 
 
-    function normalizeFilename(value) {
-      return String(value || "BondStats Conversation")
+    function safeFilename(value) {
+
+      return String(
+        value || "BondStats Conversation"
+      )
         .replace(/[\\/:*?"<>|]+/g, "-")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 80);
+        .slice(0, 90);
+
     }
 
 
     /* ========================================================
-       CSS
+       SHARED SUPABASE CLIENT
        ======================================================== */
 
-    function injectStyles() {
+    function resolveDatabaseClient() {
 
-      if (
-        document.getElementById(
-          "bondstats-history-v3-css"
-        )
-      ) {
-        return;
-      }
+      /*
+        IMPORTANT:
 
+        history.js MUST NOT call createClient().
 
-      const style =
-        document.createElement("style");
+        account.js owns the only Supabase client and exposes it:
 
-      style.id =
-        "bondstats-history-v3-css";
+        window.BondStatsSupabase = supabaseClient;
+      */
 
+      db =
+        window.BondStatsSupabase ||
+        null;
 
-      style.textContent = `
 
-        /* ==========================================
-           HISTORY BUTTON
-           ========================================== */
+      if (!db) {
 
-        #bondstats-history-button {
-          position: relative !important;
-          inset: auto !important;
-
-          display: none;
-          align-items: center;
-          justify-content: center;
-
-          flex: 0 0 auto;
-
-          min-height: 38px;
-          padding: 0 14px;
-          margin-right: 8px;
-
-          border-radius: 999px;
-
-          border:
-            1px solid rgba(120,255,165,.32);
-
-          background:
-            rgba(7,28,19,.74);
-
-          color: #eaffef;
-
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          font-size: 13px;
-          font-weight: 600;
-
-          cursor: pointer;
-          white-space: nowrap;
-
-          backdrop-filter:
-            blur(12px);
-
-          box-shadow:
-            inset 0 0 0 1px rgba(100,255,150,.03),
-            0 5px 18px rgba(0,0,0,.16);
-
-          transition:
-            border-color .16s ease,
-            background .16s ease,
-            transform .16s ease;
-        }
-
-
-        #bondstats-history-button:hover {
-          border-color:
-            rgba(120,255,165,.70);
-
-          background:
-            rgba(11,43,28,.94);
-
-          transform:
-            translateY(-1px);
-        }
-
-
-        /* ==========================================
-           BACKDROP
-           ========================================== */
-
-        #bondstats-history-backdrop {
-          position: fixed;
-
-          inset: 0;
-
-          z-index: 999998;
-
-          display: none;
-
-          align-items: stretch;
-          justify-content: flex-end;
-
-          background:
-            rgba(0,0,0,.56);
-
-          backdrop-filter:
-            blur(8px);
-        }
-
-
-        /* ==========================================
-           DRAWER
-           ========================================== */
-
-        #bondstats-history-panel {
-          box-sizing: border-box;
-
-          width:
-            min(470px, 95vw);
-
-          height: 100%;
-
-          display: flex;
-          flex-direction: column;
-
-          overflow: hidden;
-
-          border-left:
-            1px solid
-            rgba(115,255,158,.25);
-
-          background:
-            linear-gradient(
-              180deg,
-              rgba(14,44,29,.995),
-              rgba(5,18,12,.998)
-            );
-
-          color: #f0fff5;
-
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          box-shadow:
-            -30px 0 90px
-            rgba(0,0,0,.50);
-        }
-
-
-        #bondstats-history-panel * {
-          box-sizing: border-box;
-        }
-
-
-        /* ==========================================
-           HEADER
-           ========================================== */
-
-        .bondstats-history-header {
-          flex: 0 0 auto;
-
-          display: flex;
-
-          align-items: center;
-
-          justify-content:
-            space-between;
-
-          gap: 12px;
-
-          padding:
-            22px 20px 16px;
-
-          border-bottom:
-            1px solid
-            rgba(120,255,165,.12);
-        }
-
-
-        .bondstats-history-heading {
-          margin: 0;
-
-          font-size: 21px;
-
-          line-height: 1.2;
-
-          font-weight: 700;
-        }
-
-
-        .bondstats-history-subtitle {
-          margin:
-            5px 0 0;
-
-          color:
-            rgba(230,255,238,.57);
-
-          font-size: 11px;
-        }
-
-
-        .bondstats-history-header-buttons {
-          display: flex;
-          gap: 7px;
-        }
-
-
-        .bondstats-history-icon-button {
-          width: 35px;
-          height: 35px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 50%;
-
-          border:
-            1px solid
-            rgba(130,255,170,.18);
-
-          background:
-            rgba(255,255,255,.035);
-
-          color: #fff;
-
-          cursor: pointer;
-
-          font-size: 16px;
-        }
-
-
-        .bondstats-history-icon-button:hover {
-          background:
-            rgba(255,255,255,.08);
-        }
-
-
-        /* ==========================================
-           SEARCH / SORT TOOLBAR
-           ========================================== */
-
-        .bondstats-history-toolbar {
-          flex: 0 0 auto;
-
-          display: grid;
-
-          grid-template-columns:
-            minmax(0, 1fr) 128px;
-
-          gap: 8px;
-
-          padding:
-            12px 12px 6px;
-        }
-
-
-        #bondstats-history-search,
-        #bondstats-history-sort {
-          width: 100%;
-          height: 42px;
-
-          border-radius: 12px;
-
-          border:
-            1px solid
-            rgba(120,255,165,.17);
-
-          outline: none;
-
-          background:
-            rgba(0,0,0,.23);
-
-          color:
-            #effff4;
-
-          font-size: 13px;
-        }
-
-
-        #bondstats-history-search {
-          padding:
-            0 14px;
-        }
-
-
-        #bondstats-history-sort {
-          padding:
-            0 10px;
-
-          cursor: pointer;
-        }
-
-
-        #bondstats-history-search:focus,
-        #bondstats-history-sort:focus {
-          border-color:
-            rgba(120,255,165,.47);
-        }
-
-
-        #bondstats-history-search::placeholder {
-          color:
-            rgba(230,255,238,.38);
-        }
-
-
-        /* ==========================================
-           LIST
-           ========================================== */
-
-        #bondstats-history-list {
-          flex: 1;
-
-          overflow-y: auto;
-
-          padding: 10px;
-        }
-
-
-        .bondstats-history-empty {
-          padding:
-            38px 18px;
-
-          text-align: center;
-
-          color:
-            rgba(229,255,237,.50);
-
-          font-size: 13px;
-
-          line-height: 1.65;
-        }
-
-
-        /* ==========================================
-           CONVERSATION ITEM
-           ========================================== */
-
-        .bondstats-history-item {
-          width: 100%;
-
-          display: flex;
-
-          align-items: center;
-
-          gap: 8px;
-
-          margin-bottom: 7px;
-
-          padding:
-            13px 10px 13px 14px;
-
-          border-radius: 13px;
-
-          border:
-            1px solid
-            rgba(126,255,167,.12);
-
-          background:
-            rgba(0,0,0,.17);
-
-          color:
-            #effff4;
-
-          transition:
-            background .15s ease,
-            border-color .15s ease;
-        }
-
-
-        .bondstats-history-item:hover {
-          background:
-            rgba(35,105,65,.22);
-
-          border-color:
-            rgba(126,255,167,.28);
-        }
-
-
-        .bondstats-history-item-main {
-          min-width: 0;
-
-          flex: 1;
-
-          cursor: pointer;
-        }
-
-
-        .bondstats-history-title {
-          overflow: hidden;
-
-          text-overflow: ellipsis;
-
-          white-space: nowrap;
-
-          font-size: 13px;
-
-          font-weight: 600;
-        }
-
-
-        .bondstats-history-time {
-          margin-top: 5px;
-
-          color:
-            rgba(222,255,232,.46);
-
-          font-size: 10px;
-        }
-
-
-        .bondstats-history-item-menu {
-          flex: 0 0 auto;
-
-          width: 30px;
-          height: 30px;
-
-          border: 0;
-          border-radius: 9px;
-
-          background:
-            rgba(255,255,255,.035);
-
-          color:
-            rgba(235,255,241,.67);
-
-          cursor: pointer;
-
-          font-size: 17px;
-        }
-
-
-        .bondstats-history-item-menu:hover {
-          background:
-            rgba(255,255,255,.09);
-
-          color: #fff;
-        }
-
-
-        /* ==========================================
-           VIEWER
-           ========================================== */
-
-        #bondstats-conversation-viewer {
-          position: fixed;
-
-          inset: 0;
-
-          z-index: 999999;
-
-          display: none;
-
-          align-items: center;
-
-          justify-content: center;
-
-          padding: 24px;
-
-          background:
-            rgba(0,0,0,.74);
-
-          backdrop-filter:
-            blur(11px);
-        }
-
-
-        #bondstats-conversation-card {
-          width:
-            min(820px, 96vw);
-
-          max-height:
-            90vh;
-
-          display: flex;
-
-          flex-direction: column;
-
-          overflow: hidden;
-
-          border-radius: 20px;
-
-          border:
-            1px solid
-            rgba(115,255,158,.24);
-
-          background:
-            linear-gradient(
-              180deg,
-              rgba(13,43,28,.998),
-              rgba(5,18,12,.998)
-            );
-
-          color: #f1fff5;
-
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          box-shadow:
-            0 40px 120px
-            rgba(0,0,0,.67);
-        }
-
-
-        #bondstats-conversation-card * {
-          box-sizing: border-box;
-        }
-
-
-        /* ==========================================
-           VIEWER HEADER
-           ========================================== */
-
-        .bondstats-conversation-header {
-          display: flex;
-
-          align-items: center;
-
-          justify-content:
-            space-between;
-
-          gap: 15px;
-
-          padding:
-            18px 20px;
-
-          border-bottom:
-            1px solid
-            rgba(120,255,165,.12);
-        }
-
-
-        #bondstats-conversation-title {
-          min-width: 0;
-
-          overflow: hidden;
-
-          text-overflow: ellipsis;
-
-          white-space: nowrap;
-
-          font-size: 16px;
-
-          font-weight: 700;
-        }
-
-
-        #bondstats-conversation-date {
-          flex: 0 0 auto;
-
-          color:
-            rgba(225,255,234,.42);
-
-          font-size: 10px;
-        }
-
-
-        /* ==========================================
-           MESSAGES
-           ========================================== */
-
-        #bondstats-conversation-messages {
-          flex: 1;
-
-          overflow-y: auto;
-
-          padding: 20px;
-        }
-
-
-        .bondstats-history-message {
-          max-width: 88%;
-
-          margin:
-            0 0 14px;
-
-          padding:
-            12px 14px;
-
-          border-radius: 14px;
-
-          font-size: 13px;
-
-          line-height: 1.55;
-
-          white-space: pre-wrap;
-
-          overflow-wrap: anywhere;
-        }
-
-
-        .bondstats-history-message-user {
-          margin-left: auto;
-
-          background:
-            rgba(104,255,153,.16);
-
-          border:
-            1px solid
-            rgba(112,255,159,.26);
-        }
-
-
-        .bondstats-history-message-assistant {
-          margin-right: auto;
-
-          background:
-            rgba(0,0,0,.25);
-
-          border:
-            1px solid
-            rgba(112,255,159,.10);
-        }
-
-
-        .bondstats-message-role {
-          margin-bottom: 6px;
-
-          color: #7dffa4;
-
-          font-size: 9px;
-
-          font-weight: 700;
-
-          letter-spacing: .09em;
-
-          text-transform: uppercase;
-        }
-
-
-        /* ==========================================
-           VIEWER FOOTER
-           ========================================== */
-
-        .bondstats-conversation-footer {
-          flex: 0 0 auto;
-
-          display: flex;
-
-          align-items: center;
-
-          justify-content:
-            space-between;
-
-          flex-wrap: wrap;
-
-          gap: 9px;
-
-          padding:
-            14px 20px;
-
-          border-top:
-            1px solid
-            rgba(120,255,165,.12);
-        }
-
-
-        .bondstats-history-action-group {
-          display: flex;
-
-          align-items: center;
-
-          flex-wrap: wrap;
-
-          gap: 7px;
-        }
-
-
-        .bondstats-history-action {
-          min-height: 38px;
-
-          padding:
-            0 12px;
-
-          border-radius: 10px;
-
-          border:
-            1px solid
-            rgba(130,255,170,.20);
-
-          background:
-            rgba(255,255,255,.04);
-
-          color: #fff;
-
-          cursor: pointer;
-
-          font-size: 12px;
-        }
-
-
-        .bondstats-history-action:hover {
-          background:
-            rgba(255,255,255,.09);
-        }
-
-
-        #bondstats-continue-conversation {
-          border-color:
-            rgba(117,255,155,.48);
-
-          background:
-            rgba(63,190,102,.17);
-
-          color:
-            #caffd8;
-
-          font-weight: 700;
-        }
-
-
-        #bondstats-delete-conversation {
-          border-color:
-            rgba(255,110,110,.28);
-
-          background:
-            rgba(100,15,15,.16);
-
-          color:
-            #ffbcbc;
-        }
-
-
-        /* ==========================================
-           ACTION MODAL
-           ========================================== */
-
-        #bondstats-history-action-modal {
-          position: fixed;
-
-          inset: 0;
-
-          z-index: 10000000;
-
-          display: none;
-
-          align-items: center;
-
-          justify-content: center;
-
-          padding: 20px;
-
-          background:
-            rgba(0,0,0,.74);
-
-          backdrop-filter:
-            blur(10px);
-        }
-
-
-        #bondstats-history-action-card {
-          box-sizing: border-box;
-
-          width:
-            min(410px, 94vw);
-
-          padding: 24px;
-
-          border-radius: 20px;
-
-          border:
-            1px solid
-            rgba(115,255,158,.28);
-
-          background:
-            linear-gradient(
-              180deg,
-              rgba(15,48,31,.998),
-              rgba(5,18,12,.998)
-            );
-
-          color: #f1fff5;
-
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          box-shadow:
-            0 30px 100px
-            rgba(0,0,0,.66);
-        }
-
-
-        .bondstats-action-title {
-          margin:
-            0 0 8px;
-
-          font-size: 19px;
-        }
-
-
-        .bondstats-action-description {
-          margin:
-            0 0 18px;
-
-          color:
-            rgba(230,255,238,.65);
-
-          font-size: 13px;
-
-          line-height: 1.5;
-        }
-
-
-        #bondstats-action-input {
-          width: 100%;
-
-          height: 43px;
-
-          margin-bottom: 17px;
-
-          padding:
-            0 13px;
-
-          border-radius: 11px;
-
-          border:
-            1px solid
-            rgba(120,255,165,.25);
-
-          outline: none;
-
-          background:
-            rgba(0,0,0,.25);
-
-          color: white;
-
-          font-size: 14px;
-        }
-
-
-        #bondstats-action-input:focus {
-          border-color:
-            rgba(120,255,165,.55);
-        }
-
-
-        .bondstats-action-buttons {
-          display: flex;
-
-          justify-content:
-            flex-end;
-
-          gap: 9px;
-        }
-
-
-        .bondstats-action-modal-button {
-          height: 39px;
-
-          padding:
-            0 14px;
-
-          border-radius: 10px;
-
-          cursor: pointer;
-
-          font-size: 12px;
-        }
-
-
-        #bondstats-action-cancel {
-          border:
-            1px solid
-            rgba(255,255,255,.15);
-
-          background:
-            rgba(255,255,255,.04);
-
-          color: white;
-        }
-
-
-        #bondstats-action-confirm {
-          border:
-            1px solid
-            rgba(120,255,165,.35);
-
-          background: #75ff9b;
-
-          color: #06200f;
-
-          font-weight: 700;
-        }
-
-
-        #bondstats-action-error {
-          min-height: 16px;
-
-          margin-top: 10px;
-
-          color: #ffb5b5;
-
-          font-size: 11px;
-        }
-
-
-        /* ==========================================
-           TOAST
-           ========================================== */
-
-        #bondstats-history-toast {
-          position: fixed;
-
-          left: 50%;
-          bottom: 24px;
-
-          z-index: 10000001;
-
-          max-width:
-            min(560px, 90vw);
-
-          transform:
-            translateX(-50%)
-            translateY(24px);
-
-          opacity: 0;
-
-          pointer-events: none;
-
-          padding:
-            11px 17px;
-
-          border-radius: 999px;
-
-          border:
-            1px solid
-            rgba(117,255,155,.35);
-
-          background:
-            rgba(5,27,16,.97);
-
-          color:
-            #dcffe6;
-
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          font-size: 12px;
-
-          text-align: center;
-
-          box-shadow:
-            0 15px 50px
-            rgba(0,0,0,.42);
-
-          transition:
-            opacity .20s ease,
-            transform .20s ease;
-        }
-
-
-        #bondstats-history-toast.visible {
-          opacity: 1;
-
-          transform:
-            translateX(-50%)
-            translateY(0);
-        }
-
-
-        /* ==========================================
-           MOBILE
-           ========================================== */
-
-        @media (max-width: 700px) {
-
-          #bondstats-history-button {
-            min-height: 34px;
-
-            padding:
-              0 11px;
-
-            font-size: 12px;
-          }
-
-
-          .bondstats-history-toolbar {
-            grid-template-columns: 1fr;
-          }
-
-
-          #bondstats-conversation-viewer {
-            padding: 10px;
-          }
-
-
-          #bondstats-conversation-card {
-            max-height: 95vh;
-          }
-
-
-          .bondstats-conversation-footer {
-            align-items: stretch;
-          }
-
-
-          .bondstats-history-action-group {
-            width: 100%;
-          }
-
-
-          .bondstats-history-action {
-            flex: 1;
-          }
-
-        }
-
-      `;
-
-
-      document.head.appendChild(
-        style
-      );
-    }
-
-
-    /* ========================================================
-       TOAST
-       ======================================================== */
-
-    function createToast() {
-
-      if (
-        document.getElementById(
-          "bondstats-history-toast"
-        )
-      ) {
-        return;
-      }
-
-
-      const toast =
-        document.createElement("div");
-
-      toast.id =
-        "bondstats-history-toast";
-
-      document.body.appendChild(
-        toast
-      );
-    }
-
-
-    let toastTimer = null;
-
-
-    function showToast(message) {
-
-      const toast =
-        document.getElementById(
-          "bondstats-history-toast"
+        console.warn(
+          "[BondStats History] Shared Supabase client is not available."
         );
-
-
-      if (!toast) {
-        return;
-      }
-
-
-      toast.textContent =
-        message || "";
-
-
-      toast.classList.add(
-        "visible"
-      );
-
-
-      if (toastTimer) {
-        window.clearTimeout(
-          toastTimer
-        );
-      }
-
-
-      toastTimer =
-        window.setTimeout(
-          () => {
-
-            toast.classList.remove(
-              "visible"
-            );
-
-          },
-          2600
-        );
-    }
-
-
-    /* ========================================================
-       CREATE ACTION MODAL
-       ======================================================== */
-
-    function createActionModal() {
-
-      if (
-        document.getElementById(
-          "bondstats-history-action-modal"
-        )
-      ) {
-        return;
-      }
-
-
-      const overlay =
-        document.createElement("div");
-
-
-      overlay.id =
-        "bondstats-history-action-modal";
-
-
-      overlay.innerHTML = `
-
-        <div
-          id="bondstats-history-action-card"
-        >
-
-          <h3
-            id="bondstats-action-title"
-            class="bondstats-action-title"
-          ></h3>
-
-
-          <p
-            id="bondstats-action-description"
-            class="bondstats-action-description"
-          ></p>
-
-
-          <input
-            id="bondstats-action-input"
-            type="text"
-            maxlength="120"
-            autocomplete="off"
-          />
-
-
-          <div
-            class="bondstats-action-buttons"
-          >
-
-            <button
-              id="bondstats-action-cancel"
-              class="bondstats-action-modal-button"
-              type="button"
-            >
-              Cancel
-            </button>
-
-
-            <button
-              id="bondstats-action-confirm"
-              class="bondstats-action-modal-button"
-              type="button"
-            >
-              Confirm
-            </button>
-
-          </div>
-
-
-          <div
-            id="bondstats-action-error"
-          ></div>
-
-        </div>
-
-      `;
-
-
-      document.body.appendChild(
-        overlay
-      );
-
-
-      document
-        .getElementById(
-          "bondstats-action-cancel"
-        )
-        ?.addEventListener(
-          "click",
-          closeActionModal
-        );
-
-
-      overlay.addEventListener(
-        "click",
-        event => {
-
-          if (
-            event.target === overlay
-          ) {
-
-            closeActionModal();
-
-          }
-
-        }
-      );
-    }
-
-
-    function closeActionModal() {
-
-      const overlay =
-        document.getElementById(
-          "bondstats-history-action-modal"
-        );
-
-
-      if (overlay) {
-
-        overlay.style.display =
-          "none";
-
-      }
-    }
-
-
-    /* ========================================================
-       OPEN ACTION MODAL
-       ======================================================== */
-
-    function openActionModal({
-      mode,
-      conversationId,
-      title = ""
-    }) {
-
-      createActionModal();
-
-
-      const overlay =
-        document.getElementById(
-          "bondstats-history-action-modal"
-        );
-
-
-      const heading =
-        document.getElementById(
-          "bondstats-action-title"
-        );
-
-
-      const description =
-        document.getElementById(
-          "bondstats-action-description"
-        );
-
-
-      const input =
-        document.getElementById(
-          "bondstats-action-input"
-        );
-
-
-      const confirmButton =
-        document.getElementById(
-          "bondstats-action-confirm"
-        );
-
-
-      const errorBox =
-        document.getElementById(
-          "bondstats-action-error"
-        );
-
-
-      if (
-        !overlay ||
-        !heading ||
-        !description ||
-        !input ||
-        !confirmButton
-      ) {
-        return;
-      }
-
-
-      if (errorBox) {
-        errorBox.textContent = "";
-      }
-
-
-      if (mode === "rename") {
-
-        heading.textContent =
-          "Rename conversation";
-
-
-        description.textContent =
-          "Choose a new name for this conversation.";
-
-
-        input.style.display =
-          "block";
-
-
-        input.value =
-          title;
-
-
-        confirmButton.textContent =
-          "Save";
-
-
-        confirmButton.style.background =
-          "#75ff9b";
-
-
-        confirmButton.style.color =
-          "#06200f";
-
-
-      } else {
-
-        heading.textContent =
-          "Delete conversation";
-
-
-        description.textContent =
-          "This permanently deletes this conversation and all of its stored messages.";
-
-
-        input.style.display =
-          "none";
-
-
-        input.value =
-          "";
-
-
-        confirmButton.textContent =
-          "Delete";
-
-
-        confirmButton.style.background =
-          "#ff8080";
-
-
-        confirmButton.style.color =
-          "#2b0505";
-
-      }
-
-
-      confirmButton.onclick =
-        async () => {
-
-          confirmButton.disabled =
-            true;
-
-
-          try {
-
-            if (mode === "rename") {
-
-              await performRename(
-                conversationId,
-                input.value
-              );
-
-            } else {
-
-              await performDelete(
-                conversationId
-              );
-
-            }
-
-          } finally {
-
-            confirmButton.disabled =
-              false;
-
-          }
-        };
-
-
-      overlay.style.display =
-        "flex";
-
-
-      if (mode === "rename") {
-
-        window.setTimeout(
-          () => {
-
-            input.focus();
-            input.select();
-
-          },
-          50
-        );
-      }
-    }
-
-
-    /* ========================================================
-       MAIN UI
-       ======================================================== */
-
-    function createHistoryUI() {
-
-      if (
-        document.getElementById(
-          "bondstats-history-button"
-        )
-      ) {
-        return;
-      }
-
-
-      injectStyles();
-      createToast();
-      createActionModal();
-
-
-      /* ------------------------------------------------------
-         HISTORY BUTTON
-         ------------------------------------------------------ */
-
-      const historyButton =
-        document.createElement(
-          "button"
-        );
-
-
-      historyButton.id =
-        "bondstats-history-button";
-
-
-      historyButton.type =
-        "button";
-
-
-      historyButton.textContent =
-        "History";
-
-
-      /* ------------------------------------------------------
-         MOUNT BUTTON
-         ------------------------------------------------------ */
-
-      function mountHistoryButton() {
-
-        const accountButton =
-          document.getElementById(
-            "bondstats-account-trigger"
-          );
-
-
-        if (
-          accountButton &&
-          accountButton.parentElement
-        ) {
-
-          accountButton.parentElement
-            .insertBefore(
-              historyButton,
-              accountButton
-            );
-
-
-          return true;
-        }
-
-
-        const candidates =
-          document.querySelectorAll(
-            "button, a, [role='button']"
-          );
-
-
-        for (
-          const candidate
-          of candidates
-        ) {
-
-          if (
-            safeText(
-              candidate.textContent
-            ).toLowerCase() ===
-            "new session"
-          ) {
-
-            if (
-              candidate.parentElement
-            ) {
-
-              candidate.parentElement
-                .insertBefore(
-                  historyButton,
-                  candidate
-                );
-
-
-              return true;
-            }
-          }
-        }
-
 
         return false;
+
       }
 
 
-      if (!mountHistoryButton()) {
-
-        let attempts = 0;
-
-
-        const timer =
-          window.setInterval(
-            () => {
-
-              attempts += 1;
-
-
-              if (
-                mountHistoryButton() ||
-                attempts >= 60
-              ) {
-
-                window.clearInterval(
-                  timer
-                );
-
-              }
-
-            },
-            250
-          );
-      }
-
-
-      /* ------------------------------------------------------
-         DRAWER
-         ------------------------------------------------------ */
-
-      const backdrop =
-        document.createElement(
-          "div"
-        );
-
-
-      backdrop.id =
-        "bondstats-history-backdrop";
-
-
-      backdrop.innerHTML = `
-
-        <aside
-          id="bondstats-history-panel"
-          aria-label="Chat history"
-        >
-
-          <div
-            class="bondstats-history-header"
-          >
-
-            <div>
-
-              <h2
-                class="bondstats-history-heading"
-              >
-                Chat History
-              </h2>
-
-
-              <p
-                class="bondstats-history-subtitle"
-                id="bondstats-history-user"
-              ></p>
-
-            </div>
-
-
-            <div
-              class="bondstats-history-header-buttons"
-            >
-
-              <button
-                class="bondstats-history-icon-button"
-                id="bondstats-history-refresh"
-                type="button"
-                title="Refresh"
-              >
-                ↻
-              </button>
-
-
-              <button
-                class="bondstats-history-icon-button"
-                id="bondstats-history-close"
-                type="button"
-                title="Close"
-              >
-                ×
-              </button>
-
-            </div>
-
-          </div>
-
-
-          <div
-            class="bondstats-history-toolbar"
-          >
-
-            <input
-              id="bondstats-history-search"
-              type="search"
-              placeholder="Search conversations…"
-              autocomplete="off"
-            />
-
-
-            <select
-              id="bondstats-history-sort"
-            >
-
-              <option value="newest">
-                Newest
-              </option>
-
-              <option value="oldest">
-                Oldest
-              </option>
-
-              <option value="title">
-                A–Z
-              </option>
-
-            </select>
-
-          </div>
-
-
-          <div
-            id="bondstats-history-list"
-          ></div>
-
-        </aside>
-
-      `;
-
-
-      document.body.appendChild(
-        backdrop
-      );
-
-
-      /* ------------------------------------------------------
-         VIEWER
-         ------------------------------------------------------ */
-
-      const viewer =
-        document.createElement(
-          "div"
-        );
-
-
-      viewer.id =
-        "bondstats-conversation-viewer";
-
-
-      viewer.innerHTML = `
-
-        <section
-          id="bondstats-conversation-card"
-        >
-
-          <div
-            class="bondstats-conversation-header"
-          >
-
-            <div
-              id="bondstats-conversation-title"
-            >
-              Conversation
-            </div>
-
-
-            <div
-              id="bondstats-conversation-date"
-            ></div>
-
-          </div>
-
-
-          <div
-            id="bondstats-conversation-messages"
-          ></div>
-
-
-          <div
-            class="bondstats-conversation-footer"
-          >
-
-            <div
-              class="bondstats-history-action-group"
-            >
-
-              <button
-                id="bondstats-rename-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Rename
-              </button>
-
-
-              <button
-                id="bondstats-duplicate-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Duplicate
-              </button>
-
-
-              <button
-                id="bondstats-copy-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Copy
-              </button>
-
-
-              <button
-                id="bondstats-export-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Export
-              </button>
-
-
-              <button
-                id="bondstats-delete-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Delete
-              </button>
-
-            </div>
-
-
-            <div
-              class="bondstats-history-action-group"
-            >
-
-              <button
-                id="bondstats-close-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Close
-              </button>
-
-
-              <button
-                id="bondstats-continue-conversation"
-                class="bondstats-history-action"
-                type="button"
-              >
-                Open & Continue
-              </button>
-
-            </div>
-
-          </div>
-
-        </section>
-
-      `;
-
-
-      document.body.appendChild(
-        viewer
-      );
-
-
-      /* ======================================================
-         EVENTS
-         ====================================================== */
-
-      historyButton.addEventListener(
-        "click",
-        openHistory
-      );
-
-
-      document
-        .getElementById(
-          "bondstats-history-close"
-        )
-        ?.addEventListener(
-          "click",
-          closeHistory
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-history-refresh"
-        )
-        ?.addEventListener(
-          "click",
-          async () => {
-
-            await loadConversations();
-
-            showToast(
-              "History refreshed"
-            );
-
-          }
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-history-search"
-        )
-        ?.addEventListener(
-          "input",
-          event => {
-
-            currentSearch =
-              safeText(
-                event.target.value
-              );
-
-
-            applyFilters();
-
-          }
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-history-sort"
-        )
-        ?.addEventListener(
-          "change",
-          event => {
-
-            currentSort =
-              event.target.value ||
-              "newest";
-
-
-            applyFilters();
-
-          }
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-close-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          closeConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-rename-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          renameActiveConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-delete-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          deleteActiveConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-duplicate-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          duplicateActiveConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-copy-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          copyActiveConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-export-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          exportActiveConversation
-        );
-
-
-      document
-        .getElementById(
-          "bondstats-continue-conversation"
-        )
-        ?.addEventListener(
-          "click",
-          continueConversation
-        );
-
-
-      backdrop.addEventListener(
-        "click",
-        event => {
-
-          if (
-            event.target ===
-            backdrop
-          ) {
-
-            closeHistory();
-
-          }
-
-        }
-      );
-
-
-      viewer.addEventListener(
-        "click",
-        event => {
-
-          if (
-            event.target ===
-            viewer
-          ) {
-
-            closeConversation();
-
-          }
-
-        }
-      );
+      return true;
     }
 
 
     /* ========================================================
-       AUTH
+       LOAD CURRENT USER
        ======================================================== */
 
-    async function loadUser() {
+    async function loadCurrentUser() {
+
+      if (!db) return null;
+
 
       try {
 
@@ -2148,31 +194,1610 @@ if (!db) {
           null;
 
 
-        updateVisibility();
+        updateHistoryButton();
+
+
+        return currentUser;
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats History] Session error:",
+          "[BondStats History] getSession failed:",
           error
         );
+
+
+        currentUser = null;
+
+        updateHistoryButton();
+
+        return null;
 
       }
     }
 
 
-    function updateVisibility() {
+    /* ========================================================
+       STYLES
+       ======================================================== */
 
-      const button =
+    function installStyles() {
+
+      if (
         document.getElementById(
-          "bondstats-history-button"
+          "bondstats-history-styles"
+        )
+      ) {
+        return;
+      }
+
+
+      const style =
+        document.createElement("style");
+
+
+      style.id =
+        "bondstats-history-styles";
+
+
+      style.textContent = `
+
+        /* ==========================================
+           HISTORY BUTTON
+           ========================================== */
+
+        #bondstats-history-trigger {
+          position: relative !important;
+          inset: auto !important;
+
+          display: none;
+          align-items: center;
+          justify-content: center;
+
+          min-height: 38px;
+
+          padding: 0 14px;
+          margin-right: 8px;
+
+          flex: 0 0 auto;
+
+          border-radius: 999px;
+
+          border:
+            1px solid rgba(116,255,157,.32);
+
+          background:
+            rgba(7,29,18,.78);
+
+          color: #ecfff1;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          font-size: 13px;
+          font-weight: 600;
+
+          cursor: pointer;
+
+          white-space: nowrap;
+
+          backdrop-filter:
+            blur(12px);
+
+          transition:
+            .16s ease;
+        }
+
+
+        #bondstats-history-trigger:hover {
+          background:
+            rgba(16,55,34,.94);
+
+          border-color:
+            rgba(116,255,157,.67);
+
+          transform:
+            translateY(-1px);
+        }
+
+
+        /* ==========================================
+           HISTORY OVERLAY
+           ========================================== */
+
+        #bondstats-history-overlay {
+          position: fixed;
+
+          inset: 0;
+
+          display: none;
+
+          justify-content: flex-end;
+
+          z-index: 999998;
+
+          background:
+            rgba(0,0,0,.57);
+
+          backdrop-filter:
+            blur(7px);
+        }
+
+
+        #bondstats-history-drawer {
+          width:
+            min(470px, 95vw);
+
+          height: 100%;
+
+          display: flex;
+          flex-direction: column;
+
+          overflow: hidden;
+
+          color: #effff4;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          background:
+            linear-gradient(
+              180deg,
+              rgba(15,47,31,.995),
+              rgba(5,18,12,.998)
+            );
+
+          border-left:
+            1px solid rgba(119,255,160,.25);
+
+          box-shadow:
+            -30px 0 90px rgba(0,0,0,.48);
+        }
+
+
+        #bondstats-history-drawer * {
+          box-sizing: border-box;
+        }
+
+
+        /* ==========================================
+           HEADER
+           ========================================== */
+
+        .bsh-header {
+          flex: 0 0 auto;
+
+          display: flex;
+
+          justify-content: space-between;
+          align-items: center;
+
+          gap: 12px;
+
+          padding:
+            21px 20px 16px;
+
+          border-bottom:
+            1px solid rgba(120,255,165,.12);
+        }
+
+
+        .bsh-heading {
+          margin: 0;
+
+          font-size: 21px;
+          font-weight: 700;
+        }
+
+
+        #bsh-user {
+          margin: 5px 0 0;
+
+          color:
+            rgba(225,255,234,.55);
+
+          font-size: 11px;
+        }
+
+
+        .bsh-header-buttons {
+          display: flex;
+
+          gap: 7px;
+        }
+
+
+        .bsh-circle-button {
+          width: 35px;
+          height: 35px;
+
+          display: flex;
+
+          align-items: center;
+          justify-content: center;
+
+          border-radius: 50%;
+
+          border:
+            1px solid rgba(130,255,170,.18);
+
+          background:
+            rgba(255,255,255,.04);
+
+          color: white;
+
+          cursor: pointer;
+
+          font-size: 16px;
+        }
+
+
+        .bsh-circle-button:hover {
+          background:
+            rgba(255,255,255,.09);
+        }
+
+
+        /* ==========================================
+           TOOLBAR
+           ========================================== */
+
+        .bsh-toolbar {
+          flex: 0 0 auto;
+
+          display: grid;
+
+          grid-template-columns:
+            minmax(0,1fr) 125px;
+
+          gap: 8px;
+
+          padding:
+            12px 12px 6px;
+        }
+
+
+        #bsh-search,
+        #bsh-sort {
+          width: 100%;
+          height: 42px;
+
+          outline: none;
+
+          border-radius: 12px;
+
+          border:
+            1px solid rgba(120,255,165,.17);
+
+          background:
+            rgba(0,0,0,.23);
+
+          color: #effff4;
+
+          font-size: 13px;
+        }
+
+
+        #bsh-search {
+          padding:
+            0 13px;
+        }
+
+
+        #bsh-sort {
+          padding:
+            0 10px;
+
+          cursor: pointer;
+        }
+
+
+        #bsh-search:focus,
+        #bsh-sort:focus {
+          border-color:
+            rgba(120,255,165,.50);
+        }
+
+
+        /* ==========================================
+           LIST
+           ========================================== */
+
+        #bsh-list {
+          flex: 1;
+
+          overflow-y: auto;
+
+          padding: 10px;
+        }
+
+
+        .bsh-empty {
+          padding:
+            40px 18px;
+
+          text-align: center;
+
+          color:
+            rgba(225,255,234,.48);
+
+          font-size: 13px;
+
+          line-height: 1.65;
+        }
+
+
+        .bsh-item {
+          width: 100%;
+
+          display: flex;
+
+          align-items: center;
+
+          gap: 9px;
+
+          margin-bottom: 7px;
+
+          padding:
+            13px 11px 13px 14px;
+
+          border-radius: 13px;
+
+          border:
+            1px solid rgba(126,255,167,.12);
+
+          background:
+            rgba(0,0,0,.17);
+
+          transition:
+            .15s ease;
+        }
+
+
+        .bsh-item:hover {
+          background:
+            rgba(34,105,64,.23);
+
+          border-color:
+            rgba(126,255,167,.29);
+        }
+
+
+        .bsh-item-body {
+          min-width: 0;
+
+          flex: 1;
+
+          cursor: pointer;
+        }
+
+
+        .bsh-item-title {
+          overflow: hidden;
+
+          text-overflow: ellipsis;
+
+          white-space: nowrap;
+
+          color: #effff4;
+
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+
+        .bsh-item-date {
+          margin-top: 5px;
+
+          color:
+            rgba(222,255,232,.45);
+
+          font-size: 10px;
+        }
+
+
+        .bsh-item-rename {
+          width: 31px;
+          height: 31px;
+
+          border: 0;
+
+          border-radius: 9px;
+
+          background:
+            rgba(255,255,255,.04);
+
+          color:
+            rgba(235,255,241,.7);
+
+          cursor: pointer;
+
+          font-size: 17px;
+        }
+
+
+        .bsh-item-rename:hover {
+          background:
+            rgba(255,255,255,.09);
+
+          color: white;
+        }
+
+
+        /* ==========================================
+           CONVERSATION VIEWER
+           ========================================== */
+
+        #bsh-viewer {
+          position: fixed;
+
+          inset: 0;
+
+          z-index: 999999;
+
+          display: none;
+
+          align-items: center;
+          justify-content: center;
+
+          padding: 22px;
+
+          background:
+            rgba(0,0,0,.74);
+
+          backdrop-filter:
+            blur(11px);
+        }
+
+
+        #bsh-viewer-card {
+          width:
+            min(820px, 96vw);
+
+          max-height:
+            90vh;
+
+          display: flex;
+
+          flex-direction: column;
+
+          overflow: hidden;
+
+          border-radius: 20px;
+
+          border:
+            1px solid rgba(115,255,158,.24);
+
+          background:
+            linear-gradient(
+              180deg,
+              rgba(13,43,28,.998),
+              rgba(5,18,12,.998)
+            );
+
+          color: #f1fff5;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          box-shadow:
+            0 40px 120px rgba(0,0,0,.67);
+        }
+
+
+        #bsh-viewer-card * {
+          box-sizing: border-box;
+        }
+
+
+        .bsh-viewer-header {
+          display: flex;
+
+          align-items: center;
+
+          justify-content: space-between;
+
+          gap: 15px;
+
+          padding:
+            18px 20px;
+
+          border-bottom:
+            1px solid rgba(120,255,165,.12);
+        }
+
+
+        #bsh-viewer-title {
+          min-width: 0;
+
+          overflow: hidden;
+
+          text-overflow: ellipsis;
+
+          white-space: nowrap;
+
+          font-size: 16px;
+          font-weight: 700;
+        }
+
+
+        #bsh-viewer-date {
+          flex: 0 0 auto;
+
+          color:
+            rgba(225,255,234,.42);
+
+          font-size: 10px;
+        }
+
+
+        #bsh-messages {
+          flex: 1;
+
+          overflow-y: auto;
+
+          padding: 20px;
+        }
+
+
+        .bsh-message {
+          max-width: 88%;
+
+          margin-bottom: 14px;
+
+          padding:
+            12px 14px;
+
+          border-radius: 14px;
+
+          font-size: 13px;
+
+          line-height: 1.55;
+
+          white-space: pre-wrap;
+
+          overflow-wrap: anywhere;
+        }
+
+
+        .bsh-message-user {
+          margin-left: auto;
+
+          background:
+            rgba(104,255,153,.16);
+
+          border:
+            1px solid rgba(112,255,159,.26);
+        }
+
+
+        .bsh-message-assistant {
+          margin-right: auto;
+
+          background:
+            rgba(0,0,0,.25);
+
+          border:
+            1px solid rgba(112,255,159,.10);
+        }
+
+
+        .bsh-message-role {
+          margin-bottom: 6px;
+
+          color: #7dffa4;
+
+          font-size: 9px;
+          font-weight: 700;
+
+          letter-spacing: .09em;
+
+          text-transform: uppercase;
+        }
+
+
+        /* ==========================================
+           VIEWER FOOTER
+           ========================================== */
+
+        .bsh-viewer-footer {
+          flex: 0 0 auto;
+
+          display: flex;
+
+          justify-content: space-between;
+
+          align-items: center;
+
+          flex-wrap: wrap;
+
+          gap: 9px;
+
+          padding:
+            14px 20px;
+
+          border-top:
+            1px solid rgba(120,255,165,.12);
+        }
+
+
+        .bsh-actions {
+          display: flex;
+
+          align-items: center;
+
+          flex-wrap: wrap;
+
+          gap: 7px;
+        }
+
+
+        .bsh-action {
+          min-height: 38px;
+
+          padding:
+            0 12px;
+
+          border-radius: 10px;
+
+          border:
+            1px solid rgba(130,255,170,.20);
+
+          background:
+            rgba(255,255,255,.04);
+
+          color: white;
+
+          cursor: pointer;
+
+          font-size: 12px;
+        }
+
+
+        .bsh-action:hover {
+          background:
+            rgba(255,255,255,.09);
+        }
+
+
+        #bsh-delete {
+          color: #ffbcbc;
+
+          border-color:
+            rgba(255,110,110,.28);
+
+          background:
+            rgba(100,15,15,.16);
+        }
+
+
+        #bsh-continue {
+          color: #caffd8;
+
+          font-weight: 700;
+
+          border-color:
+            rgba(117,255,155,.48);
+
+          background:
+            rgba(63,190,102,.17);
+        }
+
+
+        /* ==========================================
+           CUSTOM MODAL
+           ========================================== */
+
+        #bsh-modal {
+          position: fixed;
+
+          inset: 0;
+
+          z-index: 10000000;
+
+          display: none;
+
+          align-items: center;
+          justify-content: center;
+
+          padding: 20px;
+
+          background:
+            rgba(0,0,0,.75);
+
+          backdrop-filter:
+            blur(10px);
+        }
+
+
+        #bsh-modal-card {
+          width:
+            min(410px,94vw);
+
+          padding: 24px;
+
+          border-radius: 20px;
+
+          border:
+            1px solid rgba(115,255,158,.28);
+
+          background:
+            linear-gradient(
+              180deg,
+              rgba(15,48,31,.998),
+              rgba(5,18,12,.998)
+            );
+
+          color: #f1fff5;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          box-shadow:
+            0 30px 100px rgba(0,0,0,.66);
+        }
+
+
+        #bsh-modal-title {
+          margin:
+            0 0 8px;
+
+          font-size: 19px;
+        }
+
+
+        #bsh-modal-description {
+          margin:
+            0 0 18px;
+
+          color:
+            rgba(230,255,238,.65);
+
+          font-size: 13px;
+
+          line-height: 1.5;
+        }
+
+
+        #bsh-modal-input {
+          width: 100%;
+
+          height: 43px;
+
+          margin-bottom: 17px;
+
+          padding:
+            0 13px;
+
+          border-radius: 11px;
+
+          border:
+            1px solid rgba(120,255,165,.25);
+
+          outline: none;
+
+          background:
+            rgba(0,0,0,.25);
+
+          color: white;
+
+          font-size: 14px;
+        }
+
+
+        .bsh-modal-buttons {
+          display: flex;
+
+          justify-content: flex-end;
+
+          gap: 9px;
+        }
+
+
+        .bsh-modal-button {
+          height: 39px;
+
+          padding:
+            0 14px;
+
+          border-radius: 10px;
+
+          cursor: pointer;
+        }
+
+
+        #bsh-modal-cancel {
+          border:
+            1px solid rgba(255,255,255,.15);
+
+          background:
+            rgba(255,255,255,.04);
+
+          color: white;
+        }
+
+
+        #bsh-modal-confirm {
+          border:
+            1px solid rgba(120,255,165,.35);
+
+          background: #75ff9b;
+
+          color: #06200f;
+
+          font-weight: 700;
+        }
+
+
+        #bsh-modal-error {
+          min-height: 16px;
+
+          margin-top: 10px;
+
+          color: #ffb5b5;
+
+          font-size: 11px;
+        }
+
+
+        /* ==========================================
+           TOAST
+           ========================================== */
+
+        #bsh-toast {
+          position: fixed;
+
+          left: 50%;
+          bottom: 24px;
+
+          z-index: 10000001;
+
+          max-width: 90vw;
+
+          opacity: 0;
+
+          pointer-events: none;
+
+          transform:
+            translateX(-50%)
+            translateY(25px);
+
+          padding:
+            11px 17px;
+
+          border-radius: 999px;
+
+          border:
+            1px solid rgba(117,255,155,.35);
+
+          background:
+            rgba(5,27,16,.97);
+
+          color: #dcffe6;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          font-size: 12px;
+
+          transition:
+            .2s ease;
+        }
+
+
+        #bsh-toast.visible {
+          opacity: 1;
+
+          transform:
+            translateX(-50%)
+            translateY(0);
+        }
+
+
+        @media (max-width:700px) {
+
+          .bsh-toolbar {
+            grid-template-columns: 1fr;
+          }
+
+
+          #bsh-viewer {
+            padding: 10px;
+          }
+
+
+          #bsh-viewer-card {
+            max-height: 95vh;
+          }
+
+
+          .bsh-actions {
+            width: 100%;
+          }
+
+
+          .bsh-action {
+            flex: 1;
+          }
+
+        }
+
+      `;
+
+
+      document.head.appendChild(
+        style
+      );
+    }
+
+
+    /* ========================================================
+       UI CREATION
+       ======================================================== */
+
+    function createUI() {
+
+      if (
+        document.getElementById(
+          "bondstats-history-trigger"
+        )
+      ) {
+        return;
+      }
+
+
+      installStyles();
+
+
+      /* ------------------------------------------------------
+         HISTORY BUTTON
+         ------------------------------------------------------ */
+
+      const historyButton =
+        document.createElement("button");
+
+
+      historyButton.id =
+        "bondstats-history-trigger";
+
+
+      historyButton.type =
+        "button";
+
+
+      historyButton.textContent =
+        "History";
+
+
+      /* ------------------------------------------------------
+         ATTACH BUTTON SAFELY
+         ------------------------------------------------------ */
+
+      function attachHistoryButton() {
+
+        const accountButton =
+          document.getElementById(
+            "bondstats-account-trigger"
+          );
+
+
+        if (
+          accountButton &&
+          accountButton.parentElement
+        ) {
+
+          accountButton.parentElement
+            .insertBefore(
+              historyButton,
+              accountButton
+            );
+
+
+          return true;
+
+        }
+
+
+        return false;
+      }
+
+
+      if (!attachHistoryButton()) {
+
+        let attempts = 0;
+
+
+        const timer =
+          window.setInterval(
+            () => {
+
+              attempts += 1;
+
+
+              if (
+                attachHistoryButton() ||
+                attempts >= 80
+              ) {
+
+                window.clearInterval(
+                  timer
+                );
+
+              }
+
+            },
+            250
+          );
+      }
+
+
+      /* ------------------------------------------------------
+         DRAWER
+         ------------------------------------------------------ */
+
+      const overlay =
+        document.createElement("div");
+
+
+      overlay.id =
+        "bondstats-history-overlay";
+
+
+      overlay.innerHTML = `
+
+        <aside
+          id="bondstats-history-drawer"
+        >
+
+          <header
+            class="bsh-header"
+          >
+
+            <div>
+
+              <h2
+                class="bsh-heading"
+              >
+                Chat History
+              </h2>
+
+              <p
+                id="bsh-user"
+              ></p>
+
+            </div>
+
+
+            <div
+              class="bsh-header-buttons"
+            >
+
+              <button
+                id="bsh-refresh"
+                class="bsh-circle-button"
+                type="button"
+                title="Refresh"
+              >
+                ↻
+              </button>
+
+              <button
+                id="bsh-close"
+                class="bsh-circle-button"
+                type="button"
+                title="Close"
+              >
+                ×
+              </button>
+
+            </div>
+
+          </header>
+
+
+          <div
+            class="bsh-toolbar"
+          >
+
+            <input
+              id="bsh-search"
+              type="search"
+              placeholder="Search conversations…"
+              autocomplete="off"
+            />
+
+
+            <select
+              id="bsh-sort"
+            >
+
+              <option value="newest">
+                Newest
+              </option>
+
+              <option value="oldest">
+                Oldest
+              </option>
+
+              <option value="title">
+                A–Z
+              </option>
+
+            </select>
+
+          </div>
+
+
+          <div
+            id="bsh-list"
+          ></div>
+
+        </aside>
+
+      `;
+
+
+      document.body.appendChild(
+        overlay
+      );
+
+
+      /* ------------------------------------------------------
+         VIEWER
+         ------------------------------------------------------ */
+
+      const viewer =
+        document.createElement("div");
+
+
+      viewer.id =
+        "bsh-viewer";
+
+
+      viewer.innerHTML = `
+
+        <section
+          id="bsh-viewer-card"
+        >
+
+          <header
+            class="bsh-viewer-header"
+          >
+
+            <div
+              id="bsh-viewer-title"
+            >
+              Conversation
+            </div>
+
+
+            <div
+              id="bsh-viewer-date"
+            ></div>
+
+          </header>
+
+
+          <div
+            id="bsh-messages"
+          ></div>
+
+
+          <footer
+            class="bsh-viewer-footer"
+          >
+
+            <div
+              class="bsh-actions"
+            >
+
+              <button
+                id="bsh-rename"
+                class="bsh-action"
+                type="button"
+              >
+                Rename
+              </button>
+
+
+              <button
+                id="bsh-duplicate"
+                class="bsh-action"
+                type="button"
+              >
+                Duplicate
+              </button>
+
+
+              <button
+                id="bsh-copy"
+                class="bsh-action"
+                type="button"
+              >
+                Copy
+              </button>
+
+
+              <button
+                id="bsh-export"
+                class="bsh-action"
+                type="button"
+              >
+                Export
+              </button>
+
+
+              <button
+                id="bsh-delete"
+                class="bsh-action"
+                type="button"
+              >
+                Delete
+              </button>
+
+            </div>
+
+
+            <div
+              class="bsh-actions"
+            >
+
+              <button
+                id="bsh-viewer-close"
+                class="bsh-action"
+                type="button"
+              >
+                Close
+              </button>
+
+
+              <button
+                id="bsh-continue"
+                class="bsh-action"
+                type="button"
+              >
+                Open & Continue
+              </button>
+
+            </div>
+
+          </footer>
+
+        </section>
+
+      `;
+
+
+      document.body.appendChild(
+        viewer
+      );
+
+
+      /* ------------------------------------------------------
+         MODAL
+         ------------------------------------------------------ */
+
+      const modal =
+        document.createElement("div");
+
+
+      modal.id =
+        "bsh-modal";
+
+
+      modal.innerHTML = `
+
+        <section
+          id="bsh-modal-card"
+        >
+
+          <h3
+            id="bsh-modal-title"
+          ></h3>
+
+
+          <p
+            id="bsh-modal-description"
+          ></p>
+
+
+          <input
+            id="bsh-modal-input"
+            type="text"
+            maxlength="120"
+            autocomplete="off"
+          />
+
+
+          <div
+            class="bsh-modal-buttons"
+          >
+
+            <button
+              id="bsh-modal-cancel"
+              class="bsh-modal-button"
+              type="button"
+            >
+              Cancel
+            </button>
+
+
+            <button
+              id="bsh-modal-confirm"
+              class="bsh-modal-button"
+              type="button"
+            >
+              Confirm
+            </button>
+
+          </div>
+
+
+          <div
+            id="bsh-modal-error"
+          ></div>
+
+        </section>
+
+      `;
+
+
+      document.body.appendChild(
+        modal
+      );
+
+
+      /* ------------------------------------------------------
+         TOAST
+         ------------------------------------------------------ */
+
+      const toast =
+        document.createElement("div");
+
+
+      toast.id =
+        "bsh-toast";
+
+
+      document.body.appendChild(
+        toast
+      );
+
+
+      installEvents(
+        historyButton,
+        overlay,
+        viewer,
+        modal
+      );
+    }
+
+
+    /* ========================================================
+       EVENTS
+       ======================================================== */
+
+    function installEvents(
+      historyButton,
+      overlay,
+      viewer,
+      modal
+    ) {
+
+      historyButton.addEventListener(
+        "click",
+        openHistory
+      );
+
+
+      document
+        .getElementById("bsh-close")
+        ?.addEventListener(
+          "click",
+          closeHistory
         );
 
 
-      const userLabel =
+      document
+        .getElementById("bsh-refresh")
+        ?.addEventListener(
+          "click",
+          async () => {
+
+            await refreshHistory();
+
+            showToast(
+              "History refreshed"
+            );
+
+          }
+        );
+
+
+      document
+        .getElementById("bsh-search")
+        ?.addEventListener(
+          "input",
+          event => {
+
+            searchQuery =
+              text(
+                event.target.value
+              );
+
+
+            applyFilters();
+
+          }
+        );
+
+
+      document
+        .getElementById("bsh-sort")
+        ?.addEventListener(
+          "change",
+          event => {
+
+            sortMode =
+              event.target.value ||
+              "newest";
+
+
+            applyFilters();
+
+          }
+        );
+
+
+      document
+        .getElementById(
+          "bsh-viewer-close"
+        )
+        ?.addEventListener(
+          "click",
+          closeViewer
+        );
+
+
+      document
+        .getElementById(
+          "bsh-rename"
+        )
+        ?.addEventListener(
+          "click",
+          openRenameForActive
+        );
+
+
+      document
+        .getElementById(
+          "bsh-delete"
+        )
+        ?.addEventListener(
+          "click",
+          openDeleteForActive
+        );
+
+
+      document
+        .getElementById(
+          "bsh-duplicate"
+        )
+        ?.addEventListener(
+          "click",
+          duplicateConversation
+        );
+
+
+      document
+        .getElementById(
+          "bsh-copy"
+        )
+        ?.addEventListener(
+          "click",
+          copyConversation
+        );
+
+
+      document
+        .getElementById(
+          "bsh-export"
+        )
+        ?.addEventListener(
+          "click",
+          exportConversation
+        );
+
+
+      document
+        .getElementById(
+          "bsh-continue"
+        )
+        ?.addEventListener(
+          "click",
+          continueConversation
+        );
+
+
+      document
+        .getElementById(
+          "bsh-modal-cancel"
+        )
+        ?.addEventListener(
+          "click",
+          closeModal
+        );
+
+
+      overlay.addEventListener(
+        "click",
+        event => {
+
+          if (
+            event.target === overlay
+          ) {
+            closeHistory();
+          }
+
+        }
+      );
+
+
+      viewer.addEventListener(
+        "click",
+        event => {
+
+          if (
+            event.target === viewer
+          ) {
+            closeViewer();
+          }
+
+        }
+      );
+
+
+      modal.addEventListener(
+        "click",
+        event => {
+
+          if (
+            event.target === modal
+          ) {
+            closeModal();
+          }
+
+        }
+      );
+    }
+
+
+    /* ========================================================
+       BUTTON VISIBILITY
+       ======================================================== */
+
+    function updateHistoryButton() {
+
+      const button =
         document.getElementById(
-          "bondstats-history-user"
+          "bondstats-history-trigger"
+        );
+
+
+      const label =
+        document.getElementById(
+          "bsh-user"
         );
 
 
@@ -2186,20 +1811,11 @@ if (!db) {
       }
 
 
-      if (userLabel) {
+      if (label) {
 
-        userLabel.textContent =
+        label.textContent =
           currentUser?.email ||
           "";
-
-      }
-
-
-      if (!currentUser) {
-
-        closeHistory();
-
-        closeConversation();
 
       }
     }
@@ -2211,40 +1827,64 @@ if (!db) {
 
     async function openHistory() {
 
+      /*
+        Always refresh auth directly.
+
+        No onAuthStateChange listener.
+      */
+
+      await loadCurrentUser();
+
+
       if (!currentUser) {
+
+        showToast(
+          "Sign in to view chat history"
+        );
+
         return;
+
       }
 
 
-      const backdrop =
+      const overlay =
         document.getElementById(
-          "bondstats-history-backdrop"
+          "bondstats-history-overlay"
         );
 
 
-      if (backdrop) {
+      if (overlay) {
 
-        backdrop.style.display =
+        overlay.style.display =
           "flex";
 
       }
 
 
-      await loadConversations();
+      /*
+        IMPORTANT:
+
+        Every opening performs a fresh database query.
+
+        Therefore newly saved chats cannot be hidden by
+        stale history.js state.
+      */
+
+      await refreshHistory();
     }
 
 
     function closeHistory() {
 
-      const backdrop =
+      const overlay =
         document.getElementById(
-          "bondstats-history-backdrop"
+          "bondstats-history-overlay"
         );
 
 
-      if (backdrop) {
+      if (overlay) {
 
-        backdrop.style.display =
+        overlay.style.display =
           "none";
 
       }
@@ -2255,28 +1895,29 @@ if (!db) {
        LOAD CONVERSATIONS
        ======================================================== */
 
-    async function loadConversations() {
+    async function refreshHistory() {
 
-      if (!currentUser) {
+      if (
+        !db ||
+        !currentUser
+      ) {
         return;
       }
 
 
       const list =
         document.getElementById(
-          "bondstats-history-list"
+          "bsh-list"
         );
 
 
-      if (!list) {
-        return;
-      }
+      if (!list) return;
 
 
       list.innerHTML = `
 
         <div
-          class="bondstats-history-empty"
+          class="bsh-empty"
         >
           Loading conversations…
         </div>
@@ -2305,7 +1946,7 @@ if (!db) {
                 ascending: false
               }
             )
-            .limit(200);
+            .limit(250);
 
 
         if (error) {
@@ -2325,7 +1966,7 @@ if (!db) {
       } catch (error) {
 
         console.error(
-          "[BondStats History] Conversation query:",
+          "[BondStats History] refresh failed:",
           error
         );
 
@@ -2333,7 +1974,7 @@ if (!db) {
         list.innerHTML = `
 
           <div
-            class="bondstats-history-empty"
+            class="bsh-empty"
           >
             History could not be loaded.
           </div>
@@ -2345,17 +1986,16 @@ if (!db) {
 
 
     /* ========================================================
-       SEARCH + SORT
+       SEARCH / SORT
        ======================================================== */
 
     function applyFilters() {
 
       const query =
-        currentSearch
-          .toLowerCase();
+        searchQuery.toLowerCase();
 
 
-      filteredConversations =
+      visibleConversations =
         conversations.filter(
           conversation => {
 
@@ -2364,7 +2004,7 @@ if (!db) {
             }
 
 
-            return safeText(
+            return text(
               conversation.title
             )
               .toLowerCase()
@@ -2375,10 +2015,10 @@ if (!db) {
 
 
       if (
-        currentSort === "oldest"
+        sortMode === "oldest"
       ) {
 
-        filteredConversations.sort(
+        visibleConversations.sort(
           (a, b) =>
             new Date(
               a.updated_at ||
@@ -2392,15 +2032,15 @@ if (!db) {
 
 
       } else if (
-        currentSort === "title"
+        sortMode === "title"
       ) {
 
-        filteredConversations.sort(
+        visibleConversations.sort(
           (a, b) =>
-            safeText(
+            text(
               a.title
             ).localeCompare(
-              safeText(
+              text(
                 b.title
               )
             )
@@ -2409,7 +2049,7 @@ if (!db) {
 
       } else {
 
-        filteredConversations.sort(
+        visibleConversations.sort(
           (a, b) =>
             new Date(
               b.updated_at ||
@@ -2424,7 +2064,7 @@ if (!db) {
       }
 
 
-      renderConversationList();
+      renderList();
     }
 
 
@@ -2432,63 +2072,63 @@ if (!db) {
        RENDER LIST
        ======================================================== */
 
-    function renderConversationList() {
+    function renderList() {
 
       const list =
         document.getElementById(
-          "bondstats-history-list"
+          "bsh-list"
         );
 
 
-      if (!list) {
-        return;
-      }
+      if (!list) return;
 
 
       if (
-        filteredConversations.length ===
-        0
+        visibleConversations.length === 0
       ) {
 
         list.innerHTML = `
 
           <div
-            class="bondstats-history-empty"
+            class="bsh-empty"
           >
+
             ${
-              currentSearch
+              searchQuery
                 ? "No matching conversations."
                 : "No saved conversations yet."
             }
+
           </div>
 
         `;
+
 
         return;
       }
 
 
       list.innerHTML =
-        filteredConversations
+        visibleConversations
           .map(
             conversation => `
 
               <div
-                class="bondstats-history-item"
-                data-conversation-id="${escapeHTML(
+                class="bsh-item"
+                data-id="${escapeHTML(
                   conversation.id
                 )}"
               >
 
                 <div
-                  class="bondstats-history-item-main"
+                  class="bsh-item-body"
                 >
 
                   <div
-                    class="bondstats-history-title"
+                    class="bsh-item-title"
                   >
                     ${escapeHTML(
-                      safeText(
+                      text(
                         conversation.title
                       ) ||
                       "Untitled conversation"
@@ -2497,7 +2137,7 @@ if (!db) {
 
 
                   <div
-                    class="bondstats-history-time"
+                    class="bsh-item-date"
                   >
                     ${escapeHTML(
                       formatDate(
@@ -2511,7 +2151,7 @@ if (!db) {
 
 
                 <button
-                  class="bondstats-history-item-menu"
+                  class="bsh-item-rename"
                   type="button"
                   title="Rename"
                 >
@@ -2527,31 +2167,26 @@ if (!db) {
 
       list
         .querySelectorAll(
-          ".bondstats-history-item"
+          ".bsh-item"
         )
         .forEach(
           item => {
 
             const id =
-              item.dataset
-                .conversationId;
+              item.dataset.id;
 
 
             item
               .querySelector(
-                ".bondstats-history-item-main"
+                ".bsh-item-body"
               )
               ?.addEventListener(
                 "click",
                 () => {
 
-                  if (id) {
-
-                    openConversation(
-                      id
-                    );
-
-                  }
+                  openConversation(
+                    id
+                  );
 
                 }
               );
@@ -2559,7 +2194,7 @@ if (!db) {
 
             item
               .querySelector(
-                ".bondstats-history-item-menu"
+                ".bsh-item-rename"
               )
               ?.addEventListener(
                 "click",
@@ -2568,30 +2203,9 @@ if (!db) {
                   event.stopPropagation();
 
 
-                  const conversation =
-                    getConversationById(
-                      id
-                    );
-
-
-                  if (
-                    id &&
-                    conversation
-                  ) {
-
-                    openActionModal({
-                      mode:
-                        "rename",
-
-                      conversationId:
-                        id,
-
-                      title:
-                        conversation.title ||
-                        ""
-                    });
-
-                  }
+                  openRenameModal(
+                    id
+                  );
 
                 }
               );
@@ -2605,54 +2219,52 @@ if (!db) {
        OPEN CONVERSATION
        ======================================================== */
 
-    async function openConversation(
-      conversationId
-    ) {
+    async function openConversation(id) {
 
       if (
+        !db ||
         !currentUser ||
-        !conversationId
+        !id
       ) {
         return;
       }
 
 
-      activeConversationId =
-        conversationId;
+      activeConversationId = id;
+
+      activeMessages = [];
 
 
       const conversation =
-        getConversationById(
-          conversationId
-        );
+        getConversation(id);
 
 
       const title =
         document.getElementById(
-          "bondstats-conversation-title"
+          "bsh-viewer-title"
         );
 
 
       const date =
         document.getElementById(
-          "bondstats-conversation-date"
+          "bsh-viewer-date"
         );
 
 
-      const messages =
+      const container =
         document.getElementById(
-          "bondstats-conversation-messages"
+          "bsh-messages"
         );
 
 
       const viewer =
         document.getElementById(
-          "bondstats-conversation-viewer"
+          "bsh-viewer"
         );
 
 
       if (
-        !messages ||
+        !container ||
         !viewer
       ) {
         return;
@@ -2662,7 +2274,7 @@ if (!db) {
       if (title) {
 
         title.textContent =
-          safeText(
+          text(
             conversation?.title
           ) ||
           "Conversation";
@@ -2681,10 +2293,10 @@ if (!db) {
       }
 
 
-      messages.innerHTML = `
+      container.innerHTML = `
 
         <div
-          class="bondstats-history-empty"
+          class="bsh-empty"
         >
           Loading messages…
         </div>
@@ -2709,7 +2321,7 @@ if (!db) {
             )
             .eq(
               "conversation_id",
-              conversationId
+              id
             )
             .eq(
               "user_id",
@@ -2728,29 +2340,27 @@ if (!db) {
         }
 
 
-        activeConversationMessages =
+        activeMessages =
           Array.isArray(data)
             ? data
             : [];
 
 
-        renderMessages(
-          activeConversationMessages
-        );
+        renderMessages();
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats History] Message query:",
+          "[BondStats History] messages failed:",
           error
         );
 
 
-        messages.innerHTML = `
+        container.innerHTML = `
 
           <div
-            class="bondstats-history-empty"
+            class="bsh-empty"
           >
             Messages could not be loaded.
           </div>
@@ -2765,73 +2375,74 @@ if (!db) {
        RENDER MESSAGES
        ======================================================== */
 
-    function renderMessages(items) {
+    function renderMessages() {
 
       const container =
         document.getElementById(
-          "bondstats-conversation-messages"
+          "bsh-messages"
         );
 
 
-      if (!container) {
-        return;
-      }
+      if (!container) return;
 
 
       if (
-        items.length === 0
+        activeMessages.length === 0
       ) {
 
         container.innerHTML = `
 
           <div
-            class="bondstats-history-empty"
+            class="bsh-empty"
           >
-            No messages stored for this conversation.
+            No messages stored.
           </div>
 
         `;
+
 
         return;
       }
 
 
       container.innerHTML =
-        items
+        activeMessages
           .map(
             message => {
 
-              const role =
+              const user =
                 message.role ===
-                "user"
-                  ? "user"
-                  : "assistant";
-
-
-              const roleLabel =
-                role === "user"
-                  ? "You"
-                  : "BondStats AI";
+                "user";
 
 
               return `
 
                 <article
                   class="
-                    bondstats-history-message
-                    bondstats-history-message-${role}
+                    bsh-message
+                    ${
+                      user
+                        ? "bsh-message-user"
+                        : "bsh-message-assistant"
+                    }
                   "
                 >
 
                   <div
-                    class="bondstats-message-role"
+                    class="bsh-message-role"
                   >
-                    ${roleLabel}
+
+                    ${
+                      user
+                        ? "You"
+                        : "BondStats AI"
+                    }
+
                   </div>
 
 
                   ${escapeHTML(
-                    safeText(
+                    text(
                       message.content
                     )
                   )}
@@ -2851,20 +2462,26 @@ if (!db) {
 
 
     /* ========================================================
-       RENAME
+       CUSTOM MODAL
        ======================================================== */
 
-    function renameActiveConversation() {
+    function openRenameForActive() {
 
       if (!activeConversationId) {
         return;
       }
 
 
+      openRenameModal(
+        activeConversationId
+      );
+    }
+
+
+    function openRenameModal(id) {
+
       const conversation =
-        getConversationById(
-          activeConversationId
-        );
+        getConversation(id);
 
 
       if (!conversation) {
@@ -2872,42 +2489,256 @@ if (!db) {
       }
 
 
-      openActionModal({
-        mode:
-          "rename",
-
-        conversationId:
-          activeConversationId,
-
-        title:
+      openModal({
+        mode: "rename",
+        id,
+        value:
           conversation.title ||
           ""
       });
     }
 
 
-    async function performRename(
-      conversationId,
+    function openDeleteForActive() {
+
+      if (!activeConversationId) {
+        return;
+      }
+
+
+      openModal({
+        mode: "delete",
+        id:
+          activeConversationId
+      });
+    }
+
+
+    function openModal({
+      mode,
+      id,
+      value = ""
+    }) {
+
+      const modal =
+        document.getElementById(
+          "bsh-modal"
+        );
+
+
+      const heading =
+        document.getElementById(
+          "bsh-modal-title"
+        );
+
+
+      const description =
+        document.getElementById(
+          "bsh-modal-description"
+        );
+
+
+      const input =
+        document.getElementById(
+          "bsh-modal-input"
+        );
+
+
+      const confirm =
+        document.getElementById(
+          "bsh-modal-confirm"
+        );
+
+
+      const error =
+        document.getElementById(
+          "bsh-modal-error"
+        );
+
+
+      if (
+        !modal ||
+        !heading ||
+        !description ||
+        !input ||
+        !confirm
+      ) {
+        return;
+      }
+
+
+      if (error) {
+        error.textContent = "";
+      }
+
+
+      if (
+        mode === "rename"
+      ) {
+
+        heading.textContent =
+          "Rename conversation";
+
+
+        description.textContent =
+          "Choose a new name for this conversation.";
+
+
+        input.style.display =
+          "block";
+
+
+        input.value =
+          value;
+
+
+        confirm.textContent =
+          "Save";
+
+
+        confirm.style.background =
+          "#75ff9b";
+
+
+        confirm.style.color =
+          "#06200f";
+
+
+      } else {
+
+        heading.textContent =
+          "Delete conversation";
+
+
+        description.textContent =
+          "This permanently deletes the conversation and all stored messages.";
+
+
+        input.style.display =
+          "none";
+
+
+        input.value =
+          "";
+
+
+        confirm.textContent =
+          "Delete";
+
+
+        confirm.style.background =
+          "#ff8080";
+
+
+        confirm.style.color =
+          "#2b0505";
+
+      }
+
+
+      confirm.onclick =
+        async () => {
+
+          confirm.disabled =
+            true;
+
+
+          try {
+
+            if (
+              mode === "rename"
+            ) {
+
+              await renameConversation(
+                id,
+                input.value
+              );
+
+
+            } else {
+
+              await deleteConversation(
+                id
+              );
+
+            }
+
+
+          } finally {
+
+            confirm.disabled =
+              false;
+
+          }
+        };
+
+
+      modal.style.display =
+        "flex";
+
+
+      if (
+        mode === "rename"
+      ) {
+
+        window.setTimeout(
+          () => {
+
+            input.focus();
+
+            input.select();
+
+          },
+          50
+        );
+      }
+    }
+
+
+    function closeModal() {
+
+      const modal =
+        document.getElementById(
+          "bsh-modal"
+        );
+
+
+      if (modal) {
+
+        modal.style.display =
+          "none";
+
+      }
+    }
+
+
+    /* ========================================================
+       RENAME
+       ======================================================== */
+
+    async function renameConversation(
+      id,
       requestedTitle
     ) {
 
       if (
+        !db ||
         !currentUser ||
-        !conversationId
+        !id
       ) {
         return;
       }
 
 
       const newTitle =
-        safeText(
+        text(
           requestedTitle
         );
 
 
       const errorBox =
         document.getElementById(
-          "bondstats-action-error"
+          "bsh-modal-error"
         );
 
 
@@ -2926,11 +2757,6 @@ if (!db) {
 
       try {
 
-        const now =
-          new Date()
-            .toISOString();
-
-
         const {
           error
         } =
@@ -2938,14 +2764,11 @@ if (!db) {
             .from("conversations")
             .update({
               title:
-                newTitle,
-
-              updated_at:
-                now
+                newTitle
             })
             .eq(
               "id",
-              conversationId
+              id
             )
             .eq(
               "user_id",
@@ -2959,9 +2782,7 @@ if (!db) {
 
 
         const conversation =
-          getConversationById(
-            conversationId
-          );
+          getConversation(id);
 
 
         if (conversation) {
@@ -2969,38 +2790,32 @@ if (!db) {
           conversation.title =
             newTitle;
 
-
-          conversation.updated_at =
-            now;
-
         }
+
+
+        closeModal();
 
 
         applyFilters();
 
 
         if (
-          activeConversationId ===
-          conversationId
+          activeConversationId === id
         ) {
 
-          const title =
+          const heading =
             document.getElementById(
-              "bondstats-conversation-title"
+              "bsh-viewer-title"
             );
 
 
-          if (title) {
+          if (heading) {
 
-            title.textContent =
+            heading.textContent =
               newTitle;
 
           }
-
         }
-
-
-        closeActionModal();
 
 
         showToast(
@@ -3011,7 +2826,7 @@ if (!db) {
       } catch (error) {
 
         console.error(
-          "[BondStats History] Rename failed:",
+          "[BondStats History] rename failed:",
           error
         );
 
@@ -3020,7 +2835,7 @@ if (!db) {
 
           errorBox.textContent =
             error?.message ||
-            "Conversation could not be renamed.";
+            "Rename failed.";
 
         }
       }
@@ -3031,30 +2846,12 @@ if (!db) {
        DELETE
        ======================================================== */
 
-    function deleteActiveConversation() {
-
-      if (!activeConversationId) {
-        return;
-      }
-
-
-      openActionModal({
-        mode:
-          "delete",
-
-        conversationId:
-          activeConversationId
-      });
-    }
-
-
-    async function performDelete(
-      conversationId
-    ) {
+    async function deleteConversation(id) {
 
       if (
+        !db ||
         !currentUser ||
-        !conversationId
+        !id
       ) {
         return;
       }
@@ -3062,11 +2859,18 @@ if (!db) {
 
       const errorBox =
         document.getElementById(
-          "bondstats-action-error"
+          "bsh-modal-error"
         );
 
 
       try {
+
+        /*
+          Messages first.
+
+          This works even without
+          ON DELETE CASCADE.
+        */
 
         const {
           error:
@@ -3077,7 +2881,7 @@ if (!db) {
             .delete()
             .eq(
               "conversation_id",
-              conversationId
+              id
             )
             .eq(
               "user_id",
@@ -3099,7 +2903,7 @@ if (!db) {
             .delete()
             .eq(
               "id",
-              conversationId
+              id
             )
             .eq(
               "user_id",
@@ -3116,24 +2920,15 @@ if (!db) {
 
         conversations =
           conversations.filter(
-            item =>
-              item.id !==
-              conversationId
+            conversation =>
+              conversation.id !== id
           );
 
 
-        activeConversationId =
-          null;
+        closeModal();
 
 
-        activeConversationMessages =
-          [];
-
-
-        closeActionModal();
-
-
-        closeConversation();
+        closeViewer();
 
 
         applyFilters();
@@ -3147,7 +2942,7 @@ if (!db) {
       } catch (error) {
 
         console.error(
-          "[BondStats History] Delete failed:",
+          "[BondStats History] delete failed:",
           error
         );
 
@@ -3156,7 +2951,7 @@ if (!db) {
 
           errorBox.textContent =
             error?.message ||
-            "Conversation could not be deleted.";
+            "Delete failed.";
 
         }
       }
@@ -3167,9 +2962,10 @@ if (!db) {
        DUPLICATE
        ======================================================== */
 
-    async function duplicateActiveConversation() {
+    async function duplicateConversation() {
 
       if (
+        !db ||
         !currentUser ||
         !activeConversationId
       ) {
@@ -3178,7 +2974,7 @@ if (!db) {
 
 
       const original =
-        getConversationById(
+        getConversation(
           activeConversationId
         );
 
@@ -3192,7 +2988,7 @@ if (!db) {
 
         const {
           data:
-            newConversation,
+            created,
           error:
             conversationError
         } =
@@ -3204,7 +3000,7 @@ if (!db) {
 
               title:
                 `${
-                  safeText(
+                  text(
                     original.title
                   ) ||
                   "Conversation"
@@ -3224,26 +3020,26 @@ if (!db) {
 
 
         if (
-          activeConversationMessages.length
+          activeMessages.length >
+          0
         ) {
 
-          const clonedMessages =
-            activeConversationMessages
-              .map(
-                message => ({
-                  conversation_id:
-                    newConversation.id,
+          const copies =
+            activeMessages.map(
+              message => ({
+                conversation_id:
+                  created.id,
 
-                  user_id:
-                    currentUser.id,
+                user_id:
+                  currentUser.id,
 
-                  role:
-                    message.role,
+                role:
+                  message.role,
 
-                  content:
-                    message.content
-                })
-              );
+                content:
+                  message.content
+              })
+            );
 
 
           const {
@@ -3253,7 +3049,7 @@ if (!db) {
             await db
               .from("messages")
               .insert(
-                clonedMessages
+                copies
               );
 
 
@@ -3265,12 +3061,7 @@ if (!db) {
         }
 
 
-        conversations.unshift(
-          newConversation
-        );
-
-
-        applyFilters();
+        await refreshHistory();
 
 
         showToast(
@@ -3281,7 +3072,7 @@ if (!db) {
       } catch (error) {
 
         console.error(
-          "[BondStats History] Duplicate failed:",
+          "[BondStats History] duplicate failed:",
           error
         );
 
@@ -3294,19 +3085,19 @@ if (!db) {
 
 
     /* ========================================================
-       COPY
+       TEXT REPRESENTATION
        ======================================================== */
 
-    function conversationAsText() {
+    function conversationToText() {
 
       const conversation =
-        getConversationById(
+        getConversation(
           activeConversationId
         );
 
 
       const title =
-        safeText(
+        text(
           conversation?.title
         ) ||
         "BondStats Conversation";
@@ -3326,28 +3117,25 @@ if (!db) {
 
       for (
         const message
-        of activeConversationMessages
+        of activeMessages
       ) {
 
-        const role =
-          message.role === "user"
-            ? "You"
-            : "BondStats AI";
-
-
         lines.push(
-          `${role}:`
+          message.role === "user"
+            ? "You:"
+            : "BondStats AI:"
         );
 
 
         lines.push(
-          safeText(
+          text(
             message.content
           )
         );
 
 
         lines.push("");
+
       }
 
 
@@ -3355,22 +3143,22 @@ if (!db) {
     }
 
 
-    async function copyActiveConversation() {
+    /* ========================================================
+       COPY
+       ======================================================== */
+
+    async function copyConversation() {
 
       if (!activeConversationId) {
         return;
       }
 
 
-      const content =
-        conversationAsText();
-
-
       try {
 
         await navigator.clipboard
           .writeText(
-            content
+            conversationToText()
           );
 
 
@@ -3382,7 +3170,7 @@ if (!db) {
       } catch (error) {
 
         console.error(
-          "[BondStats History] Clipboard failed:",
+          "[BondStats History] copy failed:",
           error
         );
 
@@ -3395,10 +3183,10 @@ if (!db) {
 
 
     /* ========================================================
-       EXPORT TXT
+       EXPORT
        ======================================================== */
 
-    function exportActiveConversation() {
+    function exportConversation() {
 
       if (!activeConversationId) {
         return;
@@ -3406,18 +3194,16 @@ if (!db) {
 
 
       const conversation =
-        getConversationById(
+        getConversation(
           activeConversationId
         );
 
 
-      const content =
-        conversationAsText();
-
-
       const blob =
         new Blob(
-          [content],
+          [
+            conversationToText()
+          ],
           {
             type:
               "text/plain;charset=utf-8"
@@ -3431,33 +3217,31 @@ if (!db) {
         );
 
 
-      const link =
-        document.createElement(
-          "a"
-        );
+      const anchor =
+        document.createElement("a");
 
 
-      link.href =
+      anchor.href =
         url;
 
 
-      link.download =
+      anchor.download =
         `${
-          normalizeFilename(
+          safeFilename(
             conversation?.title
           )
         }.txt`;
 
 
       document.body.appendChild(
-        link
+        anchor
       );
 
 
-      link.click();
+      anchor.click();
 
 
-      link.remove();
+      anchor.remove();
 
 
       window.setTimeout(
@@ -3485,6 +3269,7 @@ if (!db) {
     async function continueConversation() {
 
       if (
+        !db ||
         !currentUser ||
         !activeConversationId
       ) {
@@ -3493,7 +3278,7 @@ if (!db) {
 
 
       const conversation =
-        getConversationById(
+        getConversation(
           activeConversationId
         );
 
@@ -3505,10 +3290,14 @@ if (!db) {
 
       try {
 
-        const now =
-          new Date()
-            .toISOString();
+        /*
+          Do NOT touch app.js.
 
+          We only make this conversation the newest
+          database conversation.
+
+          account.js can then resolve it as the latest.
+        */
 
         const {
           error
@@ -3517,7 +3306,8 @@ if (!db) {
             .from("conversations")
             .update({
               updated_at:
-                now
+                new Date()
+                  .toISOString()
             })
             .eq(
               "id",
@@ -3534,14 +3324,14 @@ if (!db) {
         }
 
 
-        localStorage.setItem(
-          "bondstats_selected_conversation",
+        sessionStorage.setItem(
+          "bondstats_continue_conversation_id",
           activeConversationId
         );
 
 
-        localStorage.setItem(
-          "bondstats_selected_conversation_title",
+        sessionStorage.setItem(
+          "bondstats_continue_conversation_title",
           conversation.title ||
           "Conversation"
         );
@@ -3555,17 +3345,10 @@ if (!db) {
         );
 
 
-        closeConversation();
+        closeViewer();
 
         closeHistory();
 
-
-        /*
-          account.js already loads the most recently
-          updated conversation after reload.
-
-          We deliberately do NOT manipulate app.js.
-        */
 
         window.setTimeout(
           () => {
@@ -3573,20 +3356,20 @@ if (!db) {
             window.location.reload();
 
           },
-          700
+          650
         );
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats History] Continue failed:",
+          "[BondStats History] continue failed:",
           error
         );
 
 
         showToast(
-          "Conversation could not be continued"
+          "Could not continue conversation"
         );
       }
     }
@@ -3596,11 +3379,11 @@ if (!db) {
        CLOSE VIEWER
        ======================================================== */
 
-    function closeConversation() {
+    function closeViewer() {
 
       const viewer =
         document.getElementById(
-          "bondstats-conversation-viewer"
+          "bsh-viewer"
         );
 
 
@@ -3616,87 +3399,132 @@ if (!db) {
         null;
 
 
-      activeConversationMessages =
-        [];
+      activeMessages = [];
     }
 
 
     /* ========================================================
-       RESTORE CONTINUE NOTICE
+       TOAST
        ======================================================== */
 
-    function restoreContinueNotice() {
+    function showToast(message) {
 
-      const selectedId =
-        localStorage.getItem(
-          "bondstats_selected_conversation"
+      const toast =
+        document.getElementById(
+          "bsh-toast"
         );
 
 
-      const title =
-        localStorage.getItem(
-          "bondstats_selected_conversation_title"
+      if (!toast) return;
+
+
+      toast.textContent =
+        message || "";
+
+
+      toast.classList.add(
+        "visible"
+      );
+
+
+      if (toastTimer) {
+
+        window.clearTimeout(
+          toastTimer
         );
 
-
-      if (!selectedId) {
-        return;
       }
 
 
-      window.setTimeout(
-        () => {
+      toastTimer =
+        window.setTimeout(
+          () => {
 
-          showToast(
-            `Active conversation: ${
-              title ||
-              "Conversation"
-            }`
-          );
+            toast.classList.remove(
+              "visible"
+            );
 
-        },
-        700
-      );
+          },
+          2500
+        );
     }
 
 
     /* ========================================================
-       AUTH EVENTS
+       SAFE STARTUP
        ======================================================== */
 
-
-    /* ========================================================
-       START
-       ======================================================== */
-
-    async function start() {
+    async function startHistory() {
 
       try {
 
-        createHistoryUI();
+        /*
+          Wait for account.js to create and expose
+          the shared Supabase client.
+
+          No new client is created here.
+        */
+
+        let attempts = 0;
 
 
-        await loadUser();
+        while (
+          !window.BondStatsSupabase &&
+          attempts < 40
+        ) {
+
+          await new Promise(
+            resolve =>
+              window.setTimeout(
+                resolve,
+                100
+              )
+          );
 
 
-        restoreContinueNotice();
+          attempts += 1;
+        }
+
+
+        if (
+          !resolveDatabaseClient()
+        ) {
+
+          console.warn(
+            "[BondStats History] Disabled because shared database client was unavailable."
+          );
+
+
+          return;
+        }
+
+
+        createUI();
+
+
+        /*
+          Read session only once at startup.
+
+          No auth subscription.
+        */
+
+        await loadCurrentUser();
 
 
         console.log(
-          "[BondStats History] V3 ready.",
-          {
-            authenticated:
-              Boolean(
-                currentUser
-              )
-          }
+          "[BondStats History] Stable module ready."
         );
 
 
       } catch (error) {
 
+        /*
+          History failure MUST NOT escape into
+          the main BondStats AI application.
+        */
+
         console.error(
-          "[BondStats History] Startup failed:",
+          "[BondStats History] startup failed:",
           error
         );
 
@@ -3715,30 +3543,24 @@ if (!db) {
 
       document.addEventListener(
         "DOMContentLoaded",
-        start,
+        startHistory,
         {
           once: true
         }
       );
 
+
     } else {
 
-      start();
+      startHistory();
 
     }
 
 
   } catch (fatalError) {
 
-    /*
-      Final isolation layer.
-
-      Even if history.js dies completely,
-      BondStats AI itself remains operational.
-    */
-
     console.error(
-      "[BondStats History] Fatal isolated error:",
+      "[BondStats History] isolated fatal error:",
       fatalError
     );
 
