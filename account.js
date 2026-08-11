@@ -1,18 +1,28 @@
 "use strict";
 
 /* ============================================================
-   BONDSTATS ACCOUNT SYSTEM
-   Version: isolated-auth-v3
+   BONDSTATS ACCOUNT + CHAT PERSISTENCE
+   Stable Edition
+   ============================================================
 
-   - Google OAuth
-   - Email/password auth
-   - iframe-safe Google popup authentication
-   - popup -> iframe session transfer
-   - persistent Supabase sessions
-   - conversations/messages persistence
-   - no modification of app.js
-   - no keydown / submit interception
-   - mounts beside "New Session"
+   FEATURES
+   ------------------------------------------------------------
+   ✓ One shared Supabase client
+   ✓ Google OAuth
+   ✓ Email/password login
+   ✓ Email/password signup
+   ✓ Persistent browser session
+   ✓ iframe-safe Google popup flow
+   ✓ Account button beside New Session
+   ✓ Automatic chat persistence
+   ✓ New Session creates a fresh conversation
+   ✓ User + assistant messages stored
+   ✓ Conversation titles from first user message
+   ✓ Shared client exposed for history.js
+   ✓ No submit interception
+   ✓ No Enter interception
+   ✓ No app.js modification
+   ✓ No async Supabase work inside onAuthStateChange
    ============================================================ */
 
 (() => {
@@ -28,48 +38,48 @@
     const SUPABASE_PUBLISHABLE_KEY =
       "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
 
-    /*
-      IMPORTANT:
-      This must be the actual direct GitHub Pages URL
-      of BondStats AI.
-
-      Keep the trailing slash.
-    */
     const DIRECT_APP_URL =
       "https://botapi33.github.io/BondStats-AI/";
 
 
     /* ========================================================
-       SAFETY
+       HARD FAIL-SAFE
        ======================================================== */
 
     if (!window.supabase?.createClient) {
       console.warn(
-        "[BondStats Account] Supabase JS unavailable. Main AI remains unaffected."
+        "[BondStats Account] Supabase JS unavailable. Main AI continues normally."
       );
       return;
     }
 
 
     /* ========================================================
-       SUPABASE CLIENT
+       ONE SHARED SUPABASE CLIENT
        ======================================================== */
 
     const db =
-  window.BondStatsSupabase ||
-  window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY,
-    {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    }
-  );
+      window.BondStatsSupabase ||
+      window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
+        }
+      );
 
-window.BondStatsSupabase = db;
+    /*
+      CRITICAL:
+
+      history.js must use THIS same client.
+      It must not create another one.
+    */
+
+    window.BondStatsSupabase = db;
 
 
     /* ========================================================
@@ -77,24 +87,42 @@ window.BondStatsSupabase = db;
        ======================================================== */
 
     let currentUser = null;
+
     let currentConversationId = null;
 
-    const savedMessageIds = new Set();
+    let observer = null;
+
+    let observerStarted = false;
+
+    let newSessionButtonHooked = false;
+
+    let authInitialized = false;
+
+    /*
+      WeakMap prevents the same rendered message element
+      from being stored multiple times.
+    */
+
+    const savedElements =
+      new WeakSet();
+
+    /*
+      Timers allow assistant messages to finish rendering
+      before they are persisted.
+    */
+
+    const elementTimers =
+      new WeakMap();
 
 
     /* ========================================================
-       UTILITIES
+       HELPERS
        ======================================================== */
 
     function safeText(value) {
       return typeof value === "string"
         ? value.trim()
         : "";
-    }
-
-
-    function normalizeURL(url) {
-      return String(url || "").replace(/#.*$/, "");
     }
 
 
@@ -107,18 +135,22 @@ window.BondStatsSupabase = db;
     }
 
 
-    function isAuthPopup() {
-      return Boolean(
-        window.opener &&
-        window.opener !== window
-      );
+    function isPopup() {
+      try {
+        return Boolean(
+          window.opener &&
+          window.opener !== window
+        );
+      } catch {
+        return false;
+      }
     }
 
 
-    function setStatus(message) {
+    function setAccountStatus(message) {
       const el =
         document.getElementById(
-          "bondstats-account-message"
+          "bondstats-account-status"
         );
 
       if (el) {
@@ -129,29 +161,29 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       CSS
+       ACCOUNT STYLES
        ======================================================== */
 
-    function injectStyles() {
+    function injectAccountStyles() {
+
       if (
         document.getElementById(
-          "bondstats-account-css"
+          "bondstats-account-styles"
         )
       ) {
         return;
       }
 
+
       const style =
         document.createElement("style");
 
+
       style.id =
-        "bondstats-account-css";
+        "bondstats-account-styles";
+
 
       style.textContent = `
-
-        /* ==========================================
-           INLINE ACCOUNT TRIGGER
-           ========================================== */
 
         #bondstats-account-trigger {
           position: relative !important;
@@ -160,56 +192,61 @@ window.BondStatsSupabase = db;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          gap: 8px;
 
           flex: 0 0 auto;
 
           min-height: 38px;
-          padding: 0 16px;
 
-          margin: 0 10px 0 0;
+          padding:
+            0 15px;
 
-          border-radius: 999px;
+          margin:
+            0 10px 0 0;
+
+          border-radius:
+            999px;
+
           border:
-            1px solid rgba(118,255,163,.48);
+            1px solid
+            rgba(118,255,163,.48);
 
           background:
-            rgba(8,31,20,.82);
+            rgba(8,31,20,.84);
 
-          color: #effff4;
+          color:
+            #effff4;
 
           font-family:
             Arial,
             Helvetica,
             sans-serif;
 
-          font-size: 13px;
-          font-weight: 600;
+          font-size:
+            13px;
 
-          letter-spacing: .01em;
+          font-weight:
+            600;
 
-          cursor: pointer;
+          cursor:
+            pointer;
 
-          white-space: nowrap;
+          white-space:
+            nowrap;
 
-          backdrop-filter: blur(14px);
-
-          box-shadow:
-            inset 0 0 0 1px
-              rgba(90,255,140,.04),
-            0 5px 22px
-              rgba(0,0,0,.18);
-
-          z-index: auto !important;
+          backdrop-filter:
+            blur(12px);
 
           transition:
-            background .18s ease,
-            border-color .18s ease,
-            transform .18s ease;
+            background .16s ease,
+            border-color .16s ease,
+            transform .16s ease;
         }
+
 
         #bondstats-account-trigger:hover {
           background:
-            rgba(13,47,30,.94);
+            rgba(13,47,30,.95);
 
           border-color:
             rgba(118,255,163,.78);
@@ -218,87 +255,83 @@ window.BondStatsSupabase = db;
             translateY(-1px);
         }
 
-        #bondstats-account-trigger:
-        active {
-          transform:
-            translateY(0);
-        }
 
         .bondstats-account-dot {
-          width: 7px;
-          height: 7px;
+          width:
+            7px;
 
-          margin-right: 8px;
+          height:
+            7px;
 
-          border-radius: 50%;
+          border-radius:
+            50%;
 
-          background: #75ff9d;
+          background:
+            #75ff9d;
 
           box-shadow:
             0 0 9px
-              rgba(117,255,157,.9);
+            rgba(117,255,157,.9);
         }
 
-
-        /* ==========================================
-           FALLBACK HOLDER
-           Only used if New Session cannot be found
-           ========================================== */
 
         #bondstats-account-fallback {
-          position: fixed;
+          position:
+            fixed;
 
-          right: 20px;
-          bottom: 20px;
+          right:
+            18px;
 
-          z-index: 9000;
+          bottom:
+            18px;
 
-          display: flex;
-          align-items: center;
-
-          pointer-events: auto;
+          z-index:
+            9000;
         }
 
 
-        /* ==========================================
-           MODAL BACKDROP
-           ========================================== */
-
         #bondstats-account-backdrop {
-          position: fixed;
+          position:
+            fixed;
 
-          inset: 0;
+          inset:
+            0;
 
-          z-index: 999999;
+          z-index:
+            999999;
 
-          display: none;
+          display:
+            none;
 
-          align-items: center;
-          justify-content: center;
+          align-items:
+            center;
 
-          padding: 22px;
+          justify-content:
+            center;
+
+          padding:
+            22px;
 
           background:
-            rgba(0,0,0,.70);
+            rgba(0,0,0,.72);
 
           backdrop-filter:
             blur(12px);
         }
 
 
-        /* ==========================================
-           MODAL
-           ========================================== */
-
         #bondstats-account-modal {
-          box-sizing: border-box;
+          box-sizing:
+            border-box;
 
           width:
             min(420px, 100%);
 
-          padding: 27px;
+          padding:
+            27px;
 
-          border-radius: 22px;
+          border-radius:
+            22px;
 
           border:
             1px solid
@@ -307,8 +340,8 @@ window.BondStatsSupabase = db;
           background:
             linear-gradient(
               180deg,
-              rgba(18,55,36,.99),
-              rgba(5,19,13,.995)
+              rgba(18,55,36,.995),
+              rgba(5,19,13,.998)
             );
 
           color:
@@ -321,9 +354,9 @@ window.BondStatsSupabase = db;
 
           box-shadow:
             0 40px 110px
-              rgba(0,0,0,.62),
+            rgba(0,0,0,.62),
             0 0 80px
-              rgba(54,255,124,.07);
+            rgba(54,255,124,.07);
         }
 
 
@@ -333,19 +366,21 @@ window.BondStatsSupabase = db;
         }
 
 
-        /* ==========================================
-           CLOSE
-           ========================================== */
-
         #bondstats-account-close {
-          float: right;
+          float:
+            right;
 
-          width: 32px;
-          height: 32px;
+          width:
+            32px;
 
-          margin: -3px -3px 0 10px;
+          height:
+            32px;
 
-          border-radius: 50%;
+          margin:
+            -3px -3px 0 10px;
+
+          border-radius:
+            50%;
 
           border:
             1px solid
@@ -354,26 +389,29 @@ window.BondStatsSupabase = db;
           background:
             rgba(255,255,255,.025);
 
-          color: white;
+          color:
+            white;
 
-          font-size: 20px;
+          font-size:
+            20px;
 
-          cursor: pointer;
+          cursor:
+            pointer;
         }
 
-
-        /* ==========================================
-           TEXT
-           ========================================== */
 
         .bondstats-account-title {
           margin:
             0 0 6px;
 
-          font-size: 22px;
-          line-height: 1.2;
+          font-size:
+            22px;
 
-          font-weight: 700;
+          line-height:
+            1.2;
+
+          font-weight:
+            700;
         }
 
 
@@ -381,28 +419,29 @@ window.BondStatsSupabase = db;
           margin:
             0 0 22px;
 
-          max-width: 335px;
-
           color:
             rgba(232,255,240,.68);
 
-          font-size: 13px;
-          line-height: 1.5;
+          font-size:
+            13px;
+
+          line-height:
+            1.5;
         }
 
 
-        /* ==========================================
-           GOOGLE BUTTON
-           ========================================== */
-
         #bondstats-google-login {
-          width: 100%;
-          height: 44px;
+          width:
+            100%;
+
+          height:
+            44px;
 
           padding:
             0 16px;
 
-          border-radius: 22px;
+          border-radius:
+            22px;
 
           border:
             1px solid #8e918f;
@@ -422,20 +461,17 @@ window.BondStatsSupabase = db;
           justify-content:
             center;
 
-          gap: 11px;
+          gap:
+            11px;
 
-          cursor: pointer;
+          cursor:
+            pointer;
 
-          font-size: 14px;
-          font-weight: 500;
+          font-size:
+            14px;
 
-          font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-
-          transition:
-            background .15s ease;
+          font-weight:
+            500;
         }
 
 
@@ -446,29 +482,26 @@ window.BondStatsSupabase = db;
 
 
         .bondstats-google-logo {
-          width: 18px;
-          height: 18px;
+          width:
+            18px;
 
-          display:
-            block;
+          height:
+            18px;
 
           flex:
             0 0 18px;
         }
 
 
-        /* ==========================================
-           DIVIDER
-           ========================================== */
-
-        .bondstats-auth-divider {
+        .bondstats-account-divider {
           display:
             flex;
 
           align-items:
             center;
 
-          gap: 12px;
+          gap:
+            12px;
 
           margin:
             19px 0;
@@ -478,37 +511,34 @@ window.BondStatsSupabase = db;
 
           font-size:
             11px;
-
-          text-transform:
-            uppercase;
-
-          letter-spacing:
-            .09em;
         }
 
 
-        .bondstats-auth-divider::before,
-        .bondstats-auth-divider::after {
-          content: "";
+        .bondstats-account-divider::before,
+        .bondstats-account-divider::after {
+          content:
+            "";
 
-          flex: 1;
+          flex:
+            1;
 
-          height: 1px;
+          height:
+            1px;
 
           background:
             rgba(126,255,167,.14);
         }
 
 
-        /* ==========================================
-           INPUTS
-           ========================================== */
-
         .bondstats-account-input {
-          display: block;
+          width:
+            100%;
 
-          width: 100%;
-          height: 44px;
+          height:
+            44px;
+
+          display:
+            block;
 
           margin:
             0 0 10px;
@@ -537,16 +567,11 @@ window.BondStatsSupabase = db;
         }
 
 
-        .bondstats-account-input:
-        focus {
+        .bondstats-account-input:focus {
           border-color:
             rgba(116,255,161,.60);
         }
 
-
-        /* ==========================================
-           EMAIL BUTTON
-           ========================================== */
 
         #bondstats-email-login {
           width:
@@ -554,9 +579,6 @@ window.BondStatsSupabase = db;
 
           height:
             44px;
-
-          margin-top:
-            2px;
 
           border:
             0;
@@ -582,17 +604,14 @@ window.BondStatsSupabase = db;
 
 
         #bondstats-email-signup {
-          display:
-            block;
-
           width:
             100%;
 
-          padding:
-            11px;
-
           margin-top:
             6px;
+
+          padding:
+            11px;
 
           border:
             0;
@@ -611,11 +630,7 @@ window.BondStatsSupabase = db;
         }
 
 
-        /* ==========================================
-           STATUS
-           ========================================== */
-
-        #bondstats-account-message {
+        #bondstats-account-status {
           min-height:
             18px;
 
@@ -633,17 +648,13 @@ window.BondStatsSupabase = db;
         }
 
 
-        /* ==========================================
-           SIGNED IN
-           ========================================== */
-
-        #bondstats-signed-in {
+        #bondstats-account-signed-in {
           display:
             none;
         }
 
 
-        #bondstats-account-email {
+        #bondstats-account-email-display {
           margin:
             14px 0 18px;
 
@@ -653,12 +664,12 @@ window.BondStatsSupabase = db;
           border-radius:
             12px;
 
-          background:
-            rgba(0,0,0,.23);
-
           border:
             1px solid
             rgba(130,255,170,.10);
+
+          background:
+            rgba(0,0,0,.23);
 
           color:
             #e0ffea;
@@ -671,7 +682,7 @@ window.BondStatsSupabase = db;
         }
 
 
-        #bondstats-sign-out {
+        #bondstats-account-signout {
           width:
             100%;
 
@@ -696,33 +707,23 @@ window.BondStatsSupabase = db;
         }
 
 
-        /* ==========================================
-           MOBILE
-           ========================================== */
-
-        @media (max-width: 700px) {
+        @media (max-width:700px) {
 
           #bondstats-account-trigger {
             min-height:
               34px;
 
             padding:
-              0 12px;
+              0 11px;
 
             font-size:
               12px;
-
-            margin-right:
-              6px;
-          }
-
-          #bondstats-account-modal {
-            padding:
-              22px;
           }
 
         }
+
       `;
+
 
       document.head.appendChild(
         style
@@ -731,42 +732,51 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       GOOGLE ICON
+       GOOGLE LOGO
        ======================================================== */
 
-    function googleLogoSVG() {
+    function googleLogo() {
+
       return `
+
         <svg
           class="bondstats-google-logo"
           viewBox="0 0 18 18"
           aria-hidden="true"
         >
+
           <path
             fill="#4285F4"
             d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.715v2.258h2.909c1.702-1.567 2.684-3.876 2.684-6.614z"
           />
+
           <path
             fill="#34A853"
             d="M9 18c2.43 0 4.468-.806 5.956-2.181l-2.909-2.258c-.806.54-1.835.859-3.047.859-2.344 0-4.328-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18z"
           />
+
           <path
             fill="#FBBC05"
             d="M3.963 10.706A5.42 5.42 0 0 1 3.68 9c0-.592.102-1.167.283-1.706V4.962H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.038l3.007-2.332z"
           />
+
           <path
             fill="#EA4335"
             d="M9 3.58c1.321 0 2.507.454 3.44 1.346l2.581-2.581C13.464.893 11.426 0 9 0A9 9 0 0 0 .956 4.962l3.007 2.332C4.672 5.165 6.656 3.58 9 3.58z"
           />
+
         </svg>
+
       `;
     }
 
 
     /* ========================================================
-       CREATE MODAL
+       ACCOUNT MODAL
        ======================================================== */
 
-    function createModal() {
+    function createAccountModal() {
+
       if (
         document.getElementById(
           "bondstats-account-backdrop"
@@ -775,32 +785,31 @@ window.BondStatsSupabase = db;
         return;
       }
 
+
       const backdrop =
         document.createElement("div");
+
 
       backdrop.id =
         "bondstats-account-backdrop";
 
+
       backdrop.innerHTML = `
 
-        <div
+        <section
           id="bondstats-account-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="BondStats account"
         >
 
           <button
             id="bondstats-account-close"
             type="button"
-            aria-label="Close"
           >
             ×
           </button>
 
 
-          <section
-            id="bondstats-signed-out"
+          <div
+            id="bondstats-account-signed-out"
           >
 
             <h2
@@ -809,12 +818,12 @@ window.BondStatsSupabase = db;
               Sign in to BondStats
             </h2>
 
+
             <p
               class="bondstats-account-subtitle"
             >
-              Keep your financial analysis
-              and conversations connected
-              to your account.
+              Keep your conversations and analysis
+              connected to your account.
             </p>
 
 
@@ -822,7 +831,7 @@ window.BondStatsSupabase = db;
               id="bondstats-google-login"
               type="button"
             >
-              ${googleLogoSVG()}
+              ${googleLogo()}
 
               <span>
                 Continue with Google
@@ -831,14 +840,14 @@ window.BondStatsSupabase = db;
 
 
             <div
-              class="bondstats-auth-divider"
+              class="bondstats-account-divider"
             >
               or
             </div>
 
 
             <input
-              id="bondstats-email"
+              id="bondstats-account-email"
               class="bondstats-account-input"
               type="email"
               placeholder="Email"
@@ -847,7 +856,7 @@ window.BondStatsSupabase = db;
 
 
             <input
-              id="bondstats-password"
+              id="bondstats-account-password"
               class="bondstats-account-input"
               type="password"
               placeholder="Password"
@@ -872,14 +881,14 @@ window.BondStatsSupabase = db;
 
 
             <div
-              id="bondstats-account-message"
+              id="bondstats-account-status"
             ></div>
 
-          </section>
+          </div>
 
 
-          <section
-            id="bondstats-signed-in"
+          <div
+            id="bondstats-account-signed-in"
           >
 
             <h2
@@ -898,21 +907,23 @@ window.BondStatsSupabase = db;
 
 
             <div
-              id="bondstats-account-email"
+              id="bondstats-account-email-display"
             ></div>
 
 
             <button
-              id="bondstats-sign-out"
+              id="bondstats-account-signout"
               type="button"
             >
               Sign out
             </button>
 
-          </section>
+          </div>
 
-        </div>
+        </section>
+
       `;
+
 
       document.body.appendChild(
         backdrop
@@ -924,10 +935,9 @@ window.BondStatsSupabase = db;
         event => {
 
           if (
-            event.target ===
-            backdrop
+            event.target === backdrop
           ) {
-            closeModal();
+            closeAccountModal();
           }
 
         }
@@ -940,7 +950,7 @@ window.BondStatsSupabase = db;
         )
         ?.addEventListener(
           "click",
-          closeModal
+          closeAccountModal
         );
 
 
@@ -950,7 +960,7 @@ window.BondStatsSupabase = db;
         )
         ?.addEventListener(
           "click",
-          signInWithGoogle
+          googleSignIn
         );
 
 
@@ -960,7 +970,7 @@ window.BondStatsSupabase = db;
         )
         ?.addEventListener(
           "click",
-          signInWithEmail
+          emailSignIn
         );
 
 
@@ -970,13 +980,13 @@ window.BondStatsSupabase = db;
         )
         ?.addEventListener(
           "click",
-          signUpWithEmail
+          emailSignUp
         );
 
 
       document
         .getElementById(
-          "bondstats-sign-out"
+          "bondstats-account-signout"
         )
         ?.addEventListener(
           "click",
@@ -986,12 +996,12 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       FIND NEW SESSION BUTTON
+       NEW SESSION BUTTON DETECTION
        ======================================================== */
 
     function findNewSessionButton() {
 
-      const explicitSelectors = [
+      const selectors = [
         "#newSession",
         "#newSessionBtn",
         "#new-session",
@@ -1003,16 +1013,17 @@ window.BondStatsSupabase = db;
 
       for (
         const selector
-        of explicitSelectors
+        of selectors
       ) {
 
-        const element =
+        const button =
           document.querySelector(
             selector
           );
 
-        if (element) {
-          return element;
+
+        if (button) {
+          return button;
         }
       }
 
@@ -1028,19 +1039,16 @@ window.BondStatsSupabase = db;
         of candidates
       ) {
 
-        const text =
+        if (
           safeText(
             candidate.textContent
-          ).toLowerCase();
-
-
-        if (
-          text ===
+          ).toLowerCase() ===
           "new session"
         ) {
-          return candidate;
-        }
 
+          return candidate;
+
+        }
       }
 
 
@@ -1049,10 +1057,10 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       ACCOUNT TRIGGER
+       ACCOUNT BUTTON
        ======================================================== */
 
-    function createTrigger() {
+    function createAccountTrigger() {
 
       if (
         document.getElementById(
@@ -1064,9 +1072,7 @@ window.BondStatsSupabase = db;
 
 
       const trigger =
-        document.createElement(
-          "button"
-        );
+        document.createElement("button");
 
 
       trigger.id =
@@ -1078,6 +1084,7 @@ window.BondStatsSupabase = db;
 
 
       trigger.innerHTML = `
+
         <span
           class="bondstats-account-dot"
         ></span>
@@ -1087,12 +1094,13 @@ window.BondStatsSupabase = db;
         >
           Sign in
         </span>
+
       `;
 
 
       trigger.addEventListener(
         "click",
-        openModal
+        openAccountModal
       );
 
 
@@ -1105,65 +1113,37 @@ window.BondStatsSupabase = db;
         newSession.parentElement
       ) {
 
-        /*
-          BEST CASE:
-          Account button becomes a normal sibling
-          directly beside New Session.
+        newSession.parentElement
+          .insertBefore(
+            trigger,
+            newSession
+          );
 
-          No absolute/fixed positioning.
-          No overlap with Ready badge.
-        */
-
-        newSession.parentElement.insertBefore(
-          trigger,
-          newSession
-        );
-
-        console.log(
-          "[BondStats Account] Mounted beside New Session."
-        );
 
         return;
       }
 
 
-      /*
-        FALLBACK:
-        Never put it in top-right,
-        because that is where the Ready badge lives.
-      */
-
-      const holder =
-        document.createElement(
-          "div"
-        );
+      const fallback =
+        document.createElement("div");
 
 
-      holder.id =
+      fallback.id =
         "bondstats-account-fallback";
 
 
-      holder.appendChild(
+      fallback.appendChild(
         trigger
       );
 
 
       document.body.appendChild(
-        holder
-      );
-
-
-      console.warn(
-        "[BondStats Account] New Session button not found. Using safe bottom-right fallback."
+        fallback
       );
     }
 
 
-    /* ========================================================
-       MODAL
-       ======================================================== */
-
-    function openModal() {
+    function openAccountModal() {
 
       const backdrop =
         document.getElementById(
@@ -1172,13 +1152,15 @@ window.BondStatsSupabase = db;
 
 
       if (backdrop) {
+
         backdrop.style.display =
           "flex";
+
       }
     }
 
 
-    function closeModal() {
+    function closeAccountModal() {
 
       const backdrop =
         document.getElementById(
@@ -1187,37 +1169,39 @@ window.BondStatsSupabase = db;
 
 
       if (backdrop) {
+
         backdrop.style.display =
           "none";
+
       }
     }
 
 
     /* ========================================================
-       RENDER AUTH
+       AUTH UI
        ======================================================== */
 
     function renderAuthState() {
 
       const signedOut =
         document.getElementById(
-          "bondstats-signed-out"
+          "bondstats-account-signed-out"
         );
 
 
       const signedIn =
         document.getElementById(
-          "bondstats-signed-in"
+          "bondstats-account-signed-in"
         );
 
 
-      const accountEmail =
+      const email =
         document.getElementById(
-          "bondstats-account-email"
+          "bondstats-account-email-display"
         );
 
 
-      const triggerText =
+      const trigger =
         document.getElementById(
           "bondstats-account-trigger-text"
         );
@@ -1241,17 +1225,22 @@ window.BondStatsSupabase = db;
           "block";
 
 
-        if (accountEmail) {
-          accountEmail.textContent =
+        if (email) {
+
+          email.textContent =
             currentUser.email ||
             "Signed in";
+
         }
 
 
-        if (triggerText) {
-          triggerText.textContent =
+        if (trigger) {
+
+          trigger.textContent =
             "Account";
+
         }
+
 
       } else {
 
@@ -1263,9 +1252,11 @@ window.BondStatsSupabase = db;
           "none";
 
 
-        if (triggerText) {
-          triggerText.textContent =
+        if (trigger) {
+
+          trigger.textContent =
             "Sign in";
+
         }
 
       }
@@ -1273,15 +1264,157 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       GOOGLE OAUTH
+       INITIAL SESSION
        ======================================================== */
 
-    async function signInWithGoogle() {
+    async function loadInitialSession() {
 
       try {
 
-        setStatus(
-          "Opening secure Google sign-in…"
+        const {
+          data,
+          error
+        } =
+          await db.auth.getSession();
+
+
+        if (error) {
+          throw error;
+        }
+
+
+        currentUser =
+          data?.session?.user ||
+          null;
+
+
+        renderAuthState();
+
+
+        /*
+          Load last conversation OUTSIDE
+          onAuthStateChange.
+        */
+
+        if (currentUser) {
+
+          await loadConversationSelection();
+
+        }
+
+
+        authInitialized =
+          true;
+
+
+      } catch (error) {
+
+        console.error(
+          "[BondStats Account] Initial session failed:",
+          error
+        );
+
+      }
+    }
+
+
+    /* ========================================================
+       AUTH STATE LISTENER
+       ======================================================== */
+
+    /*
+      IMPORTANT:
+
+      NO async callback.
+      NO await inside this listener.
+      NO db.from() calls inside this listener.
+
+      Supabase documents an active deadlock issue
+      with async work inside onAuthStateChange.
+    */
+
+    db.auth.onAuthStateChange(
+      (
+        event,
+        session
+      ) => {
+
+        try {
+
+          currentUser =
+            session?.user ||
+            null;
+
+
+          renderAuthState();
+
+
+          if (
+            event ===
+            "SIGNED_OUT"
+          ) {
+
+            currentConversationId =
+              null;
+
+
+            return;
+          }
+
+
+          /*
+            Schedule DB work AFTER callback completes.
+          */
+
+          if (
+            event === "SIGNED_IN" ||
+            event === "INITIAL_SESSION"
+          ) {
+
+            window.setTimeout(
+              () => {
+
+                loadConversationSelection()
+                  .catch(
+                    error => {
+
+                      console.error(
+                        "[BondStats Account] Conversation selection failed:",
+                        error
+                      );
+
+                    }
+                  );
+
+              },
+              0
+            );
+
+          }
+
+
+        } catch (error) {
+
+          console.error(
+            "[BondStats Account] Auth listener error:",
+            error
+          );
+
+        }
+      }
+    );
+
+
+    /* ========================================================
+       GOOGLE AUTH
+       ======================================================== */
+
+    async function googleSignIn() {
+
+      try {
+
+        setAccountStatus(
+          "Opening Google sign-in…"
         );
 
 
@@ -1290,8 +1423,7 @@ window.BondStatsSupabase = db;
           error
         } =
           await db.auth.signInWithOAuth({
-            provider:
-              "google",
+            provider: "google",
 
             options: {
               redirectTo:
@@ -1309,40 +1441,23 @@ window.BondStatsSupabase = db;
 
 
         if (!data?.url) {
+
           throw new Error(
-            "Google authorization URL was not returned."
+            "No Google authorization URL returned."
           );
+
         }
 
 
-        /*
-          Open OAuth outside the iframe.
-
-          This works both when:
-          - GitHub page is opened directly
-          - BondStats AI is embedded on bondstats.org
-        */
-
-        const popup =
+        const authWindow =
           window.open(
             data.url,
             "bondstats-google-auth",
-            [
-              "popup=yes",
-              "width=520",
-              "height=720",
-              "resizable=yes",
-              "scrollbars=yes"
-            ].join(",")
+            "popup=yes,width=520,height=720,resizable=yes,scrollbars=yes"
           );
 
 
-        /*
-          Browser blocked popup.
-          Fallback to new tab.
-        */
-
-        if (!popup) {
+        if (!authWindow) {
 
           window.open(
             data.url,
@@ -1352,7 +1467,7 @@ window.BondStatsSupabase = db;
         }
 
 
-        setStatus(
+        setAccountStatus(
           "Complete sign-in in the Google window."
         );
 
@@ -1360,12 +1475,12 @@ window.BondStatsSupabase = db;
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Google OAuth failed:",
+          "[BondStats Account] Google sign-in failed:",
           error
         );
 
 
-        setStatus(
+        setAccountStatus(
           error?.message ||
           "Google sign-in failed."
         );
@@ -1375,7 +1490,7 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       EMAIL CREDENTIALS
+       EMAIL AUTH
        ======================================================== */
 
     function credentials() {
@@ -1386,7 +1501,7 @@ window.BondStatsSupabase = db;
           safeText(
             document
               .getElementById(
-                "bondstats-email"
+                "bondstats-account-email"
               )
               ?.value
           ),
@@ -1394,7 +1509,7 @@ window.BondStatsSupabase = db;
         password:
           document
             .getElementById(
-              "bondstats-password"
+              "bondstats-account-password"
             )
             ?.value ||
           ""
@@ -1403,11 +1518,7 @@ window.BondStatsSupabase = db;
     }
 
 
-    /* ========================================================
-       EMAIL LOGIN
-       ======================================================== */
-
-    async function signInWithEmail() {
+    async function emailSignIn() {
 
       const {
         email,
@@ -1421,9 +1532,10 @@ window.BondStatsSupabase = db;
         !password
       ) {
 
-        setStatus(
-          "Enter your email and password."
+        setAccountStatus(
+          "Enter email and password."
         );
+
 
         return;
       }
@@ -1431,7 +1543,7 @@ window.BondStatsSupabase = db;
 
       try {
 
-        setStatus(
+        setAccountStatus(
           "Signing in…"
         );
 
@@ -1440,11 +1552,10 @@ window.BondStatsSupabase = db;
           data,
           error
         } =
-          await db.auth
-            .signInWithPassword({
-              email,
-              password
-            });
+          await db.auth.signInWithPassword({
+            email,
+            password
+          });
 
 
         if (error) {
@@ -1460,30 +1571,39 @@ window.BondStatsSupabase = db;
         renderAuthState();
 
 
-        setStatus("");
+        /*
+          Safe direct call here.
+          We're no longer inside the auth callback.
+        */
+
+        if (currentUser) {
+
+          await loadConversationSelection();
+
+        }
+
+
+        setAccountStatus("");
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Email sign-in failed:",
+          "[BondStats Account] Email login failed:",
           error
         );
 
 
-        setStatus(
+        setAccountStatus(
           error?.message ||
           "Sign-in failed."
         );
+
       }
     }
 
 
-    /* ========================================================
-       EMAIL SIGNUP
-       ======================================================== */
-
-    async function signUpWithEmail() {
+    async function emailSignUp() {
 
       const {
         email,
@@ -1497,9 +1617,10 @@ window.BondStatsSupabase = db;
         !password
       ) {
 
-        setStatus(
-          "Enter an email and password."
+        setAccountStatus(
+          "Enter email and password."
         );
+
 
         return;
       }
@@ -1509,9 +1630,10 @@ window.BondStatsSupabase = db;
         password.length < 8
       ) {
 
-        setStatus(
-          "Use at least 8 characters for the password."
+        setAccountStatus(
+          "Password must contain at least 8 characters."
         );
+
 
         return;
       }
@@ -1519,7 +1641,7 @@ window.BondStatsSupabase = db;
 
       try {
 
-        setStatus(
+        setAccountStatus(
           "Creating account…"
         );
 
@@ -1556,11 +1678,15 @@ window.BondStatsSupabase = db;
           renderAuthState();
 
 
-          setStatus("");
+          await loadConversationSelection();
+
+
+          setAccountStatus("");
+
 
         } else {
 
-          setStatus(
+          setAccountStatus(
             "Account created. Check your email to confirm your address."
           );
 
@@ -1570,22 +1696,19 @@ window.BondStatsSupabase = db;
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Account creation failed:",
+          "[BondStats Account] Sign-up failed:",
           error
         );
 
 
-        setStatus(
+        setAccountStatus(
           error?.message ||
           "Account creation failed."
         );
+
       }
     }
 
-
-    /* ========================================================
-       LOGOUT
-       ======================================================== */
 
     async function signOut() {
 
@@ -1613,13 +1736,13 @@ window.BondStatsSupabase = db;
         renderAuthState();
 
 
-        closeModal();
+        closeAccountModal();
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Logout failed:",
+          "[BondStats Account] Sign out failed:",
           error
         );
 
@@ -1628,15 +1751,15 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       POPUP SESSION BRIDGE
+       POPUP OAUTH SESSION TRANSFER
        ======================================================== */
 
-    async function sendPopupSessionToOpener() {
+    async function transferPopupSession() {
 
-      if (
-        !isAuthPopup()
-      ) {
+      if (!isPopup()) {
+
         return false;
+
       }
 
 
@@ -1664,20 +1787,14 @@ window.BondStatsSupabase = db;
         ) {
 
           return false;
+
         }
 
-
-        /*
-          Send tokens only to our opener.
-
-          The opener validates the message type
-          and then hands the session to Supabase.
-        */
 
         window.opener.postMessage(
           {
             type:
-              "BONDSTATS_AUTH_SESSION",
+              "BONDSTATS_SUPABASE_SESSION",
 
             accessToken:
               session.access_token,
@@ -1685,13 +1802,22 @@ window.BondStatsSupabase = db;
             refreshToken:
               session.refresh_token
           },
-          "*"
+
+          new URL(
+            DIRECT_APP_URL
+          ).origin
         );
 
 
         window.setTimeout(
           () => {
-            window.close();
+
+            try {
+              window.close();
+            } catch {
+              // no-op
+            }
+
           },
           350
         );
@@ -1709,20 +1835,37 @@ window.BondStatsSupabase = db;
 
 
         return false;
+
       }
     }
 
 
-    /* ========================================================
-       RECEIVE POPUP SESSION
-       ======================================================== */
-
-    function installSessionReceiver() {
+    function installPopupReceiver() {
 
       window.addEventListener(
         "message",
 
         async event => {
+
+          /*
+            Only trust GitHub Pages app origin.
+          */
+
+          const expectedOrigin =
+            new URL(
+              DIRECT_APP_URL
+            ).origin;
+
+
+          if (
+            event.origin !==
+            expectedOrigin
+          ) {
+
+            return;
+
+          }
+
 
           const payload =
             event?.data;
@@ -1731,9 +1874,11 @@ window.BondStatsSupabase = db;
           if (
             !payload ||
             payload.type !==
-              "BONDSTATS_AUTH_SESSION"
+            "BONDSTATS_SUPABASE_SESSION"
           ) {
+
             return;
+
           }
 
 
@@ -1741,7 +1886,9 @@ window.BondStatsSupabase = db;
             !payload.accessToken ||
             !payload.refreshToken
           ) {
+
             return;
+
           }
 
 
@@ -1773,30 +1920,23 @@ window.BondStatsSupabase = db;
             renderAuthState();
 
 
-            if (
-              currentUser
-            ) {
+            if (currentUser) {
 
-              await loadLatestConversation();
+              await loadConversationSelection();
 
             }
 
 
-            setStatus("");
+            setAccountStatus("");
 
 
-            closeModal();
-
-
-            console.log(
-              "[BondStats Account] OAuth session received."
-            );
+            closeAccountModal();
 
 
           } catch (error) {
 
             console.error(
-              "[BondStats Account] Could not import popup session:",
+              "[BondStats Account] Session import failed:",
               error
             );
 
@@ -1807,66 +1947,145 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       LOAD CURRENT SESSION
+       CONVERSATION SELECTION
        ======================================================== */
 
-    async function loadSession() {
+    async function loadConversationSelection() {
 
-      try {
+      if (!currentUser) {
+
+        currentConversationId =
+          null;
+
+
+        return;
+      }
+
+
+      /*
+        First prefer the conversation explicitly
+        selected through History -> Open & Continue.
+      */
+
+      const selected =
+        sessionStorage.getItem(
+          "bondstats_continue_conversation_id"
+        ) ||
+        localStorage.getItem(
+          "bondstats_selected_conversation"
+        );
+
+
+      if (selected) {
 
         const {
           data,
           error
         } =
-          await db.auth.getSession();
-
-
-        if (error) {
-          throw error;
-        }
-
-
-        currentUser =
-          data?.session?.user ||
-          null;
-
-
-        renderAuthState();
+          await db
+            .from("conversations")
+            .select(
+              "id"
+            )
+            .eq(
+              "id",
+              selected
+            )
+            .eq(
+              "user_id",
+              currentUser.id
+            )
+            .maybeSingle();
 
 
         if (
-          currentUser
+          !error &&
+          data?.id
         ) {
 
-          await loadLatestConversation();
+          currentConversationId =
+            data.id;
+
+
+          sessionStorage.removeItem(
+            "bondstats_continue_conversation_id"
+          );
+
+
+          return;
 
         }
+      }
 
 
-      } catch (error) {
+      /*
+        Otherwise load newest conversation.
+      */
+
+      const {
+        data,
+        error
+      } =
+        await db
+          .from("conversations")
+          .select(
+            "id,updated_at"
+          )
+          .eq(
+            "user_id",
+            currentUser.id
+          )
+          .order(
+            "updated_at",
+            {
+              ascending:
+                false
+            }
+          )
+          .limit(1);
+
+
+      if (error) {
 
         console.error(
-          "[BondStats Account] Session load failed:",
+          "[BondStats Account] Load latest conversation failed:",
           error
         );
 
+
+        currentConversationId =
+          null;
+
+
+        return;
       }
+
+
+      currentConversationId =
+        data?.[0]?.id ||
+        null;
     }
 
 
     /* ========================================================
-       CONVERSATIONS
+       CREATE CONVERSATION
        ======================================================== */
 
     async function createConversation(
       title
     ) {
 
-      if (
-        !currentUser
-      ) {
+      if (!currentUser) {
+
         return null;
+
       }
+
+
+      const cleanTitle =
+        safeText(title)
+          .slice(0, 120) ||
+        "New conversation";
 
 
       try {
@@ -1876,16 +2095,13 @@ window.BondStatsSupabase = db;
           error
         } =
           await db
-            .from(
-              "conversations"
-            )
+            .from("conversations")
             .insert({
               user_id:
                 currentUser.id,
 
               title:
-                safeText(title) ||
-                "New conversation"
+                cleanTitle
             })
             .select(
               "id,title,created_at,updated_at"
@@ -1902,31 +2118,54 @@ window.BondStatsSupabase = db;
           data.id;
 
 
+        /*
+          Clear "continue" selection once a genuinely
+          new conversation has been created.
+        */
+
+        localStorage.removeItem(
+          "bondstats_selected_conversation"
+        );
+
+
+        localStorage.removeItem(
+          "bondstats_selected_conversation_title"
+        );
+
+
+        sessionStorage.removeItem(
+          "bondstats_continue_conversation_id"
+        );
+
+
         return data;
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Create conversation failed:",
+          "[BondStats Account] Conversation creation failed:",
           error
         );
 
 
         return null;
+
       }
     }
 
 
     /* ========================================================
-       LOAD LATEST CONVERSATION
+       UPDATE CONVERSATION TIMESTAMP
        ======================================================== */
 
-    async function loadLatestConversation() {
+    async function touchConversation() {
 
       if (
-        !currentUser
+        !currentUser ||
+        !currentConversationId
       ) {
+
         return;
       }
 
@@ -1934,44 +2173,39 @@ window.BondStatsSupabase = db;
       try {
 
         const {
-          data,
           error
         } =
           await db
-            .from(
-              "conversations"
-            )
-            .select(
-              "id,title,updated_at"
+            .from("conversations")
+            .update({
+              updated_at:
+                new Date()
+                  .toISOString()
+            })
+            .eq(
+              "id",
+              currentConversationId
             )
             .eq(
               "user_id",
               currentUser.id
-            )
-            .order(
-              "updated_at",
-              {
-                ascending:
-                  false
-              }
-            )
-            .limit(1);
+            );
 
 
         if (error) {
-          throw error;
+
+          console.error(
+            "[BondStats Account] Conversation update failed:",
+            error
+          );
+
         }
-
-
-        currentConversationId =
-          data?.[0]?.id ||
-          null;
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Conversation load failed:",
+          "[BondStats Account] Conversation touch exception:",
           error
         );
 
@@ -1980,22 +2214,7 @@ window.BondStatsSupabase = db;
 
 
     /* ========================================================
-       NEW CONVERSATION
-       ======================================================== */
-
-    function resetConversation() {
-
-      currentConversationId =
-        null;
-
-
-      savedMessageIds.clear();
-
-    }
-
-
-    /* ========================================================
-       MESSAGE SAVE
+       SAVE MESSAGE
        ======================================================== */
 
     async function saveMessage(
@@ -2006,7 +2225,9 @@ window.BondStatsSupabase = db;
       if (
         !currentUser
       ) {
-        return;
+
+        return false;
+
       }
 
 
@@ -2014,7 +2235,9 @@ window.BondStatsSupabase = db;
         role !== "user" &&
         role !== "assistant"
       ) {
-        return;
+
+        return false;
+
       }
 
 
@@ -2022,27 +2245,23 @@ window.BondStatsSupabase = db;
         safeText(content);
 
 
-      if (
-        !clean
-      ) {
-        return;
-      }
+      if (!clean) {
 
+        return false;
 
-      const messageId =
-        `${role}:${clean}`;
-
-
-      if (
-        savedMessageIds.has(
-          messageId
-        )
-      ) {
-        return;
       }
 
 
       try {
+
+        /*
+          IMPORTANT:
+
+          If this is the first message after New Session,
+          create a NEW conversation.
+
+          Title comes from first user message.
+        */
 
         if (
           !currentConversationId
@@ -2056,10 +2275,10 @@ window.BondStatsSupabase = db;
             );
 
 
-          if (
-            !conversation
-          ) {
-            return;
+          if (!conversation) {
+
+            return false;
+
           }
         }
 
@@ -2068,9 +2287,7 @@ window.BondStatsSupabase = db;
           error
         } =
           await db
-            .from(
-              "messages"
-            )
+            .from("messages")
             .insert({
               conversation_id:
                 currentConversationId,
@@ -2085,289 +2302,98 @@ window.BondStatsSupabase = db;
             });
 
 
-        if (
-          error
-        ) {
+        if (error) {
           throw error;
         }
 
 
-        savedMessageIds.add(
-          messageId
+        await touchConversation();
+
+
+        /*
+          Notify other modules without coupling them.
+        */
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "bondstats:message-saved",
+            {
+              detail: {
+                conversationId:
+                  currentConversationId,
+
+                role
+              }
+            }
+          )
         );
 
 
-        await db
-          .from(
-            "conversations"
-          )
-          .update({
-            updated_at:
-              new Date()
-                .toISOString()
-          })
-          .eq(
-            "id",
-            currentConversationId
-          );
+        return true;
 
 
       } catch (error) {
 
         console.error(
-          "[BondStats Account] Message persistence failed:",
+          "[BondStats Account] Message save failed:",
           error
         );
 
+
+        return false;
+
       }
     }
 
 
     /* ========================================================
-       MESSAGE CONTAINER
+       NEW SESSION
        ======================================================== */
 
-    function findMessagesContainer() {
+    function resetConversation() {
 
-      return (
+      currentConversationId =
+        null;
 
-        document.querySelector(
-          "#messages"
-        ) ||
 
-        document.querySelector(
-          ".messages"
-        ) ||
-
-        document.querySelector(
-          ".chat-messages"
-        )
-
+      localStorage.removeItem(
+        "bondstats_selected_conversation"
       );
-    }
 
 
-    /* ========================================================
-       ROLE DETECTION
-       ======================================================== */
-
-    function detectRole(
-      element
-    ) {
-
-      if (
-        !(element instanceof HTMLElement)
-      ) {
-        return null;
-      }
+      localStorage.removeItem(
+        "bondstats_selected_conversation_title"
+      );
 
 
-      const descriptor =
-        [
-          element.id,
-          element.className,
-          element.dataset?.role,
-          element.getAttribute(
-            "data-role"
-          )
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-
-      if (
-        descriptor.includes(
-          "user-message"
-        ) ||
-        descriptor.includes(
-          "message-user"
-        ) ||
-        /\buser\b/.test(
-          descriptor
-        )
-      ) {
-
-        return "user";
-      }
-
-
-      if (
-        descriptor.includes(
-          "assistant-message"
-        ) ||
-        descriptor.includes(
-          "ai-message"
-        ) ||
-        descriptor.includes(
-          "message-assistant"
-        )
-      ) {
-
-        return "assistant";
-      }
-
-
-      return null;
-    }
-
-
-    /* ========================================================
-       INSPECT MESSAGE NODE
-       ======================================================== */
-
-    function inspectNode(node) {
-
-      if (
-        !currentUser ||
-        !(node instanceof HTMLElement)
-      ) {
-        return;
-      }
-
-
-      const candidates =
-        [
-          node,
-
-          ...node.querySelectorAll(
-            [
-              "[data-role]",
-              ".user-message",
-              ".assistant-message",
-              ".ai-message"
-            ].join(",")
-          )
-        ];
-
-
-      for (
-        const candidate
-        of candidates
-      ) {
-
-        const role =
-          detectRole(
-            candidate
-          );
-
-
-        if (
-          !role
-        ) {
-          continue;
-        }
-
-
-        const text =
-          safeText(
-            candidate.innerText
-          );
-
-
-        if (
-          !text
-        ) {
-          continue;
-        }
-
-
-        saveMessage(
-          role,
-          text
-        );
-      }
-    }
-
-
-    /* ========================================================
-       CHAT OBSERVER
-       ======================================================== */
-
-    function startChatObserver(
-      attempt = 0
-    ) {
-
-      const container =
-        findMessagesContainer();
-
-
-      if (
-        !container
-      ) {
-
-        if (
-          attempt < 30
-        ) {
-
-          window.setTimeout(
-            () => {
-              startChatObserver(
-                attempt + 1
-              );
-            },
-            1000
-          );
-
-        }
-
-        return;
-      }
-
-
-      const observer =
-        new MutationObserver(
-          mutations => {
-
-            for (
-              const mutation
-              of mutations
-            ) {
-
-              for (
-                const node
-                of mutation.addedNodes
-              ) {
-
-                inspectNode(
-                  node
-                );
-
-              }
-            }
-          }
-        );
-
-
-      observer.observe(
-        container,
-        {
-          childList: true,
-          subtree: true
-        }
+      sessionStorage.removeItem(
+        "bondstats_continue_conversation_id"
       );
 
 
       console.log(
-        "[BondStats Account] Chat observer active."
+        "[BondStats Account] New conversation armed."
       );
     }
 
 
-    /* ========================================================
-       NEW SESSION LISTENER
-       ======================================================== */
+    function hookNewSessionButton() {
 
-    function attachNewSessionListener() {
+      if (newSessionButtonHooked) {
+
+        return;
+
+      }
+
 
       const button =
         findNewSessionButton();
 
 
-      if (
-        !button
-      ) {
+      if (!button) {
+
         return;
+
       }
 
 
@@ -2379,65 +2405,661 @@ window.BondStatsSupabase = db;
             true
         }
       );
+
+
+      newSessionButtonHooked =
+        true;
     }
 
 
     /* ========================================================
-       AUTH STATE
+       MESSAGE CONTAINER DETECTION
        ======================================================== */
 
-    db.auth.onAuthStateChange(
-      (
-        event,
-        session
-      ) => {
+    function findMessagesContainer() {
 
-        try {
-
-          currentUser =
-            session?.user ||
-            null;
-
-
-          renderAuthState();
+      const selectors = [
+        "#messages",
+        "#chatMessages",
+        "#chat-messages",
+        ".messages",
+        ".chat-messages",
+        ".conversation",
+        ".conversation-messages"
+      ];
 
 
-          if (
-            event ===
-            "SIGNED_OUT"
-          ) {
+      for (
+        const selector
+        of selectors
+      ) {
 
-            currentConversationId =
-              null;
-
-          }
-
-
-          if (
-            event ===
-              "SIGNED_IN" ||
-            event ===
-              "INITIAL_SESSION"
-          ) {
-
-            window.setTimeout(
-              loadLatestConversation,
-              0
-            );
-
-          }
-
-
-        } catch (error) {
-
-          console.error(
-            "[BondStats Account] Auth listener failed:",
-            error
+        const candidate =
+          document.querySelector(
+            selector
           );
+
+
+        if (candidate) {
+
+          return candidate;
 
         }
       }
-    );
+
+
+      return null;
+    }
+
+
+    /* ========================================================
+       MESSAGE ROLE DETECTION
+       ======================================================== */
+
+    function detectMessageRole(
+      element
+    ) {
+
+      if (
+        !(element instanceof HTMLElement)
+      ) {
+
+        return null;
+
+      }
+
+
+      const descriptor =
+        [
+          element.id,
+          element.className,
+          element.dataset?.role,
+          element.getAttribute?.(
+            "data-role"
+          ),
+          element.getAttribute?.(
+            "aria-label"
+          )
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+
+      /*
+        User message patterns.
+      */
+
+      if (
+        descriptor.includes(
+          "user-message"
+        ) ||
+        descriptor.includes(
+          "message-user"
+        ) ||
+        descriptor.includes(
+          "chat-user"
+        ) ||
+        descriptor.includes(
+          "user-bubble"
+        ) ||
+        /\buser\b/.test(
+          descriptor
+        )
+      ) {
+
+        return "user";
+
+      }
+
+
+      /*
+        Assistant message patterns.
+      */
+
+      if (
+        descriptor.includes(
+          "assistant-message"
+        ) ||
+        descriptor.includes(
+          "message-assistant"
+        ) ||
+        descriptor.includes(
+          "ai-message"
+        ) ||
+        descriptor.includes(
+          "ai-response"
+        ) ||
+        descriptor.includes(
+          "assistant"
+        )
+      ) {
+
+        return "assistant";
+
+      }
+
+
+      return null;
+    }
+
+
+    /* ========================================================
+       FIND MESSAGE ELEMENT
+       ======================================================== */
+
+    function nearestMessageElement(
+      node
+    ) {
+
+      if (
+        !(node instanceof HTMLElement)
+      ) {
+
+        return null;
+
+      }
+
+
+      /*
+        Test node itself.
+      */
+
+      if (
+        detectMessageRole(node)
+      ) {
+
+        return node;
+
+      }
+
+
+      /*
+        Test descendants.
+      */
+
+      const selectors = [
+        "[data-role='user']",
+        "[data-role='assistant']",
+        ".user-message",
+        ".assistant-message",
+        ".message-user",
+        ".message-assistant",
+        ".ai-message",
+        ".ai-response",
+        ".user-bubble"
+      ];
+
+
+      for (
+        const selector
+        of selectors
+      ) {
+
+        const child =
+          node.querySelector(
+            selector
+          );
+
+
+        if (child) {
+
+          return child;
+
+        }
+      }
+
+
+      /*
+        Test parents.
+      */
+
+      let parent =
+        node.parentElement;
+
+
+      let depth =
+        0;
+
+
+      while (
+        parent &&
+        depth < 6
+      ) {
+
+        if (
+          detectMessageRole(
+            parent
+          )
+        ) {
+
+          return parent;
+
+        }
+
+
+        parent =
+          parent.parentElement;
+
+
+        depth += 1;
+      }
+
+
+      return null;
+    }
+
+
+    /* ========================================================
+       DEBOUNCED MESSAGE PERSISTENCE
+       ======================================================== */
+
+    function scheduleMessageSave(
+      messageElement
+    ) {
+
+      if (
+        !messageElement ||
+        savedElements.has(
+          messageElement
+        )
+      ) {
+
+        return;
+
+      }
+
+
+      const existingTimer =
+        elementTimers.get(
+          messageElement
+        );
+
+
+      if (existingTimer) {
+
+        window.clearTimeout(
+          existingTimer
+        );
+
+      }
+
+
+      /*
+        Wait for rendering/streaming to settle.
+      */
+
+      const timer =
+        window.setTimeout(
+          async () => {
+
+            elementTimers.delete(
+              messageElement
+            );
+
+
+            if (
+              savedElements.has(
+                messageElement
+              )
+            ) {
+
+              return;
+
+            }
+
+
+            const role =
+              detectMessageRole(
+                messageElement
+              );
+
+
+            if (!role) {
+
+              return;
+
+            }
+
+
+            const content =
+              safeText(
+                messageElement.innerText
+              );
+
+
+            if (!content) {
+
+              return;
+
+            }
+
+
+            /*
+              Ignore obvious UI-only controls.
+            */
+
+            if (
+              content === "New Session" ||
+              content === "Analyze" ||
+              content === "History" ||
+              content === "Account"
+            ) {
+
+              return;
+
+            }
+
+
+            const success =
+              await saveMessage(
+                role,
+                content
+              );
+
+
+            if (success) {
+
+              savedElements.add(
+                messageElement
+              );
+
+            }
+
+          },
+          900
+        );
+
+
+      elementTimers.set(
+        messageElement,
+        timer
+      );
+    }
+
+
+    /* ========================================================
+       PROCESS MUTATION NODE
+       ======================================================== */
+
+    function processNode(
+      node
+    ) {
+
+      if (
+        !currentUser
+      ) {
+
+        return;
+
+      }
+
+
+      if (
+        !(node instanceof HTMLElement)
+      ) {
+
+        return;
+
+      }
+
+
+      /*
+        Direct candidate.
+      */
+
+      const direct =
+        nearestMessageElement(
+          node
+        );
+
+
+      if (direct) {
+
+        scheduleMessageSave(
+          direct
+        );
+
+      }
+
+
+      /*
+        Multiple descendants may have been inserted.
+      */
+
+      const descendants =
+        node.querySelectorAll(
+          [
+            "[data-role='user']",
+            "[data-role='assistant']",
+            ".user-message",
+            ".assistant-message",
+            ".message-user",
+            ".message-assistant",
+            ".ai-message",
+            ".ai-response",
+            ".user-bubble"
+          ].join(",")
+        );
+
+
+      descendants.forEach(
+        element => {
+
+          scheduleMessageSave(
+            element
+          );
+
+        }
+      );
+    }
+
+
+    /* ========================================================
+       OBSERVER
+       ======================================================== */
+
+    function startChatObserver(
+      attempt = 0
+    ) {
+
+      if (observerStarted) {
+
+        return;
+
+      }
+
+
+      const container =
+        findMessagesContainer();
+
+
+      if (!container) {
+
+        if (
+          attempt < 60
+        ) {
+
+          window.setTimeout(
+            () => {
+
+              startChatObserver(
+                attempt + 1
+              );
+
+            },
+            500
+          );
+
+        } else {
+
+          console.warn(
+            "[BondStats Account] Chat container not found."
+          );
+
+        }
+
+
+        return;
+      }
+
+
+      observer =
+        new MutationObserver(
+          mutations => {
+
+            if (!currentUser) {
+
+              return;
+
+            }
+
+
+            for (
+              const mutation
+              of mutations
+            ) {
+
+              /*
+                Added elements.
+              */
+
+              mutation.addedNodes
+                .forEach(
+                  node => {
+
+                    processNode(
+                      node
+                    );
+
+                  }
+                );
+
+
+              /*
+                Existing assistant node may be updated
+                while text is streaming/rendering.
+              */
+
+              if (
+                mutation.type ===
+                  "characterData" ||
+                mutation.type ===
+                  "childList"
+              ) {
+
+                const target =
+                  mutation.target instanceof HTMLElement
+                    ? mutation.target
+                    : mutation.target.parentElement;
+
+
+                if (target) {
+
+                  const messageElement =
+                    nearestMessageElement(
+                      target
+                    );
+
+
+                  if (
+                    messageElement
+                  ) {
+
+                    scheduleMessageSave(
+                      messageElement
+                    );
+
+                  }
+                }
+              }
+            }
+          }
+        );
+
+
+      observer.observe(
+        container,
+        {
+          childList:
+            true,
+
+          subtree:
+            true,
+
+          characterData:
+            true
+        }
+      );
+
+
+      observerStarted =
+        true;
+
+
+      console.log(
+        "[BondStats Account] Chat persistence observer active."
+      );
+    }
+
+
+    /* ========================================================
+       PROCESS EXISTING MESSAGES
+       ======================================================== */
+
+    function scanExistingMessages() {
+
+      if (!currentUser) {
+
+        return;
+
+      }
+
+
+      const container =
+        findMessagesContainer();
+
+
+      if (!container) {
+
+        return;
+
+      }
+
+
+      const candidates =
+        container.querySelectorAll(
+          [
+            "[data-role='user']",
+            "[data-role='assistant']",
+            ".user-message",
+            ".assistant-message",
+            ".message-user",
+            ".message-assistant",
+            ".ai-message",
+            ".ai-response",
+            ".user-bubble"
+          ].join(",")
+        );
+
+
+      candidates.forEach(
+        candidate => {
+
+          /*
+            Existing page content should NOT automatically
+            be duplicated into Supabase on every reload.
+
+            Mark it as already handled.
+          */
+
+          savedElements.add(
+            candidate
+          );
+
+        }
+      );
+    }
 
 
     /* ========================================================
@@ -2448,70 +3070,105 @@ window.BondStatsSupabase = db;
 
       try {
 
-        injectStyles();
+        injectAccountStyles();
 
 
-        createModal();
+        createAccountModal();
 
 
         /*
-          IMPORTANT:
-          OAuth popup returns to this exact GitHub page.
-
-          If this page has an opener and a valid session,
-          immediately send the session back to the iframe.
+          OAuth popup return:
+          transfer session immediately and stop.
         */
 
-        const popupTransferred =
-          await sendPopupSessionToOpener();
+        const transferred =
+          await transferPopupSession();
 
 
-        if (
-          popupTransferred
-        ) {
+        if (transferred) {
+
           return;
+
         }
 
 
-        installSessionReceiver();
+        installPopupReceiver();
 
 
-        createTrigger();
+        createAccountTrigger();
 
 
-        attachNewSessionListener();
+        hookNewSessionButton();
 
 
-        await loadSession();
+        await loadInitialSession();
+
+
+        /*
+          Existing rendered messages should not be
+          reinserted into database.
+        */
+
+        scanExistingMessages();
 
 
         startChatObserver();
 
 
-        console.log(
-          "[BondStats Account] Account system ready.",
-          {
-            embedded:
-              isEmbedded(),
+        /*
+          New Session button may render later.
+        */
 
-            authenticated:
+        if (!newSessionButtonHooked) {
+
+          let attempts = 0;
+
+
+          const newSessionTimer =
+            window.setInterval(
+              () => {
+
+                attempts += 1;
+
+
+                hookNewSessionButton();
+
+
+                if (
+                  newSessionButtonHooked ||
+                  attempts >= 40
+                ) {
+
+                  window.clearInterval(
+                    newSessionTimer
+                  );
+
+                }
+
+              },
+              500
+            );
+        }
+
+
+        console.log(
+          "[BondStats Account] Ready.",
+          {
+            signedIn:
               Boolean(
                 currentUser
-              )
+              ),
+
+            embedded:
+              isEmbedded()
           }
         );
 
 
       } catch (error) {
 
-        /*
-          This entire account layer is isolated.
-
-          app.js continues even if anything here fails.
-        */
-
         console.error(
-          "[BondStats Account] Startup error:",
+          "[BondStats Account] Startup failed:",
           error
         );
 
@@ -2532,9 +3189,11 @@ window.BondStatsSupabase = db;
         "DOMContentLoaded",
         start,
         {
-          once: true
+          once:
+            true
         }
       );
+
 
     } else {
 
@@ -2545,11 +3204,14 @@ window.BondStatsSupabase = db;
 
   } catch (fatalError) {
 
+    /*
+      No account error may escape and affect app.js.
+    */
+
     console.error(
-      "[BondStats Account] Isolated fatal error:",
+      "[BondStats Account] Fatal isolated error:",
       fatalError
     );
 
   }
-
 })();
