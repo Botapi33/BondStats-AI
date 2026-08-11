@@ -39,7 +39,7 @@
       "https://kiyuawmnmzffqlgvntbv.supabase.co";
 
     const SUPABASE_PUBLISHABLE_KEY =
-      "DEIN_SB_PUBLISHABLE_KEY_HIER";
+      "sb_publishable_riRSgP_k4LrvrHP9oHMggA_5Ik-Mjwy";
 
 
     /* ========================================================
