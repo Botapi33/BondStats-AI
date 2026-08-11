@@ -2,16 +2,23 @@
 
 /* ============================================================
    BONDSTATS CHAT HISTORY
-   ------------------------------------------------------------
-   Completely isolated from app.js
+   Version 2
+   ============================================================
 
-   Features:
-   - Reads existing Supabase login session
-   - Shows user's conversations
-   - Opens a conversation in a history viewer
-   - Delete conversation
-   - Refresh history
-   - Does NOT touch Enter / Analyze / submitMessage()
+   Features
+   ------------------------------------------------------------
+   ✓ User-bound Supabase history
+   ✓ Search conversations
+   ✓ Open conversation
+   ✓ Rename conversation
+   ✓ Delete conversation
+   ✓ Continue conversation
+   ✓ Refresh
+   ✓ Persistent selected conversation
+   ✓ Completely isolated from app.js
+   ✓ No keyboard listeners
+   ✓ No submit interception
+   ✓ No changes to BondStats AI core
    ============================================================ */
 
 (() => {
@@ -40,6 +47,10 @@
     }
 
 
+    /* ========================================================
+       SUPABASE CLIENT
+       ======================================================== */
+
     const db = window.supabase.createClient(
       SUPABASE_URL,
       SUPABASE_PUBLISHABLE_KEY,
@@ -53,8 +64,19 @@
     );
 
 
+    /* ========================================================
+       STATE
+       ======================================================== */
+
     let currentUser = null;
+
     let conversations = [];
+
+    let filteredConversations = [];
+
+    let activeConversationId = null;
+
+    let activeConversationMessages = [];
 
 
     /* ========================================================
@@ -99,6 +121,13 @@
     }
 
 
+    function getConversationById(id) {
+      return conversations.find(
+        item => item.id === id
+      ) || null;
+    }
+
+
     /* ========================================================
        CSS
        ======================================================== */
@@ -107,7 +136,7 @@
 
       if (
         document.getElementById(
-          "bondstats-history-css"
+          "bondstats-history-v2-css"
         )
       ) {
         return;
@@ -119,10 +148,14 @@
 
 
       style.id =
-        "bondstats-history-css";
+        "bondstats-history-v2-css";
 
 
       style.textContent = `
+
+        /* ==========================================
+           HISTORY BUTTON
+           ========================================== */
 
         #bondstats-history-button {
           position: relative !important;
@@ -133,7 +166,9 @@
           justify-content: center;
 
           min-height: 38px;
+
           padding: 0 14px;
+
           margin-right: 8px;
 
           border-radius: 999px;
@@ -153,13 +188,20 @@
             sans-serif;
 
           font-size: 13px;
+
           font-weight: 600;
 
           cursor: pointer;
 
           white-space: nowrap;
 
-          backdrop-filter: blur(12px);
+          backdrop-filter:
+            blur(12px);
+
+          transition:
+            border-color .16s ease,
+            background .16s ease,
+            transform .16s ease;
         }
 
 
@@ -169,8 +211,15 @@
 
           background:
             rgba(11,43,28,.92);
+
+          transform:
+            translateY(-1px);
         }
 
+
+        /* ==========================================
+           BACKDROP
+           ========================================== */
 
         #bondstats-history-backdrop {
           position: fixed;
@@ -182,6 +231,7 @@
           display: none;
 
           align-items: stretch;
+
           justify-content: flex-end;
 
           background:
@@ -192,21 +242,21 @@
         }
 
 
+        /* ==========================================
+           DRAWER
+           ========================================== */
+
         #bondstats-history-panel {
           width:
-            min(440px, 94vw);
+            min(450px, 94vw);
 
-          height:
-            100%;
+          height: 100%;
 
-          overflow:
-            hidden;
+          overflow: hidden;
 
-          display:
-            flex;
+          display: flex;
 
-          flex-direction:
-            column;
+          flex-direction: column;
 
           border-left:
             1px solid
@@ -233,24 +283,24 @@
         }
 
 
+        /* ==========================================
+           HEADER
+           ========================================== */
+
         .bondstats-history-header {
-          flex:
-            0 0 auto;
+          flex: 0 0 auto;
 
-          display:
-            flex;
+          display: flex;
 
-          align-items:
-            center;
+          align-items: center;
 
           justify-content:
             space-between;
 
-          gap:
-            12px;
+          gap: 12px;
 
           padding:
-            22px 20px 18px;
+            22px 20px 16px;
 
           border-bottom:
             1px solid
@@ -259,14 +309,11 @@
 
 
         .bondstats-history-heading {
-          margin:
-            0;
+          margin: 0;
 
-          font-size:
-            19px;
+          font-size: 20px;
 
-          font-weight:
-            700;
+          font-weight: 700;
         }
 
 
@@ -283,23 +330,18 @@
 
 
         .bondstats-history-header-buttons {
-          display:
-            flex;
+          display: flex;
 
-          gap:
-            7px;
+          gap: 7px;
         }
 
 
         .bondstats-history-icon-button {
-          width:
-            34px;
+          width: 34px;
 
-          height:
-            34px;
+          height: 34px;
 
-          border-radius:
-            50%;
+          border-radius: 50%;
 
           border:
             1px solid
@@ -308,26 +350,76 @@
           background:
             rgba(255,255,255,.035);
 
-          color:
-            #fff;
+          color: #fff;
 
-          cursor:
-            pointer;
+          cursor: pointer;
 
-          font-size:
-            16px;
+          font-size: 16px;
         }
 
 
-        #bondstats-history-list {
-          flex:
-            1;
+        /* ==========================================
+           SEARCH
+           ========================================== */
 
-          overflow-y:
-            auto;
+        .bondstats-history-search-wrap {
+          flex: 0 0 auto;
 
           padding:
-            10px;
+            12px 12px 6px;
+        }
+
+
+        #bondstats-history-search {
+          box-sizing: border-box;
+
+          width: 100%;
+
+          height: 42px;
+
+          padding:
+            0 14px;
+
+          border-radius: 12px;
+
+          border:
+            1px solid
+            rgba(120,255,165,.16);
+
+          outline: none;
+
+          background:
+            rgba(0,0,0,.22);
+
+          color:
+            #effff4;
+
+          font-size: 13px;
+        }
+
+
+        #bondstats-history-search:focus {
+          border-color:
+            rgba(120,255,165,.45);
+        }
+
+
+        #bondstats-history-search::placeholder {
+          color:
+            rgba(230,255,238,.40);
+        }
+
+
+        /* ==========================================
+           LIST
+           ========================================== */
+
+        #bondstats-history-list {
+          flex: 1;
+
+          overflow-y: auto;
+
+          padding: 10px;
         }
 
 
@@ -335,35 +427,38 @@
           padding:
             35px 18px;
 
-          text-align:
-            center;
+          text-align: center;
 
           color:
             rgba(229,255,237,.48);
 
-          font-size:
-            13px;
+          font-size: 13px;
 
-          line-height:
-            1.6;
+          line-height: 1.6;
         }
 
 
+        /* ==========================================
+           CONVERSATION ITEM
+           ========================================== */
+
         .bondstats-history-item {
-          width:
-            100%;
+          width: 100%;
 
-          display:
-            block;
+          position: relative;
 
-          margin-bottom:
-            7px;
+          display: flex;
+
+          align-items: center;
+
+          gap: 8px;
+
+          margin-bottom: 7px;
 
           padding:
-            13px 14px;
+            13px 11px 13px 14px;
 
-          border-radius:
-            13px;
+          border-radius: 13px;
 
           border:
             1px solid
@@ -372,14 +467,8 @@
           background:
             rgba(0,0,0,.16);
 
-          text-align:
-            left;
-
           color:
             #effff4;
-
-          cursor:
-            pointer;
 
           transition:
             background .15s ease,
@@ -396,61 +485,87 @@
         }
 
 
+        .bondstats-history-item-main {
+          min-width: 0;
+
+          flex: 1;
+
+          cursor: pointer;
+        }
+
+
         .bondstats-history-title {
-          overflow:
-            hidden;
+          overflow: hidden;
 
-          text-overflow:
-            ellipsis;
+          text-overflow: ellipsis;
 
-          white-space:
-            nowrap;
+          white-space: nowrap;
 
-          font-size:
-            13px;
+          font-size: 13px;
 
-          font-weight:
-            600;
+          font-weight: 600;
         }
 
 
         .bondstats-history-time {
-          margin-top:
-            5px;
+          margin-top: 5px;
 
           color:
             rgba(222,255,232,.46);
 
-          font-size:
-            10px;
+          font-size: 10px;
+        }
+
+
+        .bondstats-history-item-menu {
+          flex: 0 0 auto;
+
+          width: 30px;
+
+          height: 30px;
+
+          border: 0;
+
+          border-radius: 9px;
+
+          background:
+            rgba(255,255,255,.035);
+
+          color:
+            rgba(235,255,241,.65);
+
+          cursor: pointer;
+
+          font-size: 18px;
+        }
+
+
+        .bondstats-history-item-menu:hover {
+          background:
+            rgba(255,255,255,.08);
+
+          color: #fff;
         }
 
 
         /* ==========================================
-           CONVERSATION VIEWER
+           VIEWER
            ========================================== */
 
         #bondstats-conversation-viewer {
-          position:
-            fixed;
+          position: fixed;
 
-          inset:
-            0;
+          inset: 0;
 
-          z-index:
-            999999;
+          z-index: 999999;
 
-          display:
-            none;
+          display: none;
 
-          align-items:
-            center;
+          align-items: center;
 
-          justify-content:
-            center;
+          justify-content: center;
 
-          padding:
-            24px;
+          padding: 24px;
 
           background:
             rgba(0,0,0,.72);
@@ -462,22 +577,18 @@
 
         #bondstats-conversation-card {
           width:
-            min(760px, 96vw);
+            min(780px, 96vw);
 
           max-height:
-            88vh;
+            90vh;
 
-          display:
-            flex;
+          display: flex;
 
-          flex-direction:
-            column;
+          flex-direction: column;
 
-          overflow:
-            hidden;
+          overflow: hidden;
 
-          border-radius:
-            20px;
+          border-radius: 20px;
 
           border:
             1px solid
@@ -504,18 +615,19 @@
         }
 
 
-        .bondstats-conversation-header {
-          display:
-            flex;
+        /* ==========================================
+           VIEWER HEADER
+           ========================================== */
 
-          align-items:
-            center;
+        .bondstats-conversation-header {
+          display: flex;
+
+          align-items: center;
 
           justify-content:
             space-between;
 
-          gap:
-            15px;
+          gap: 15px;
 
           padding:
             18px 20px;
@@ -527,38 +639,35 @@
 
 
         #bondstats-conversation-title {
-          overflow:
-            hidden;
+          min-width: 0;
 
-          text-overflow:
-            ellipsis;
+          overflow: hidden;
 
-          white-space:
-            nowrap;
+          text-overflow: ellipsis;
 
-          font-size:
-            16px;
+          white-space: nowrap;
 
-          font-weight:
-            700;
+          font-size: 16px;
+
+          font-weight: 700;
         }
 
 
+        /* ==========================================
+           MESSAGES
+           ========================================== */
+
         #bondstats-conversation-messages {
-          overflow-y:
-            auto;
+          overflow-y: auto;
 
-          flex:
-            1;
+          flex: 1;
 
-          padding:
-            20px;
+          padding: 20px;
         }
 
 
         .bondstats-history-message {
-          max-width:
-            88%;
+          max-width: 88%;
 
           margin:
             0 0 14px;
@@ -566,26 +675,20 @@
           padding:
             12px 14px;
 
-          border-radius:
-            14px;
+          border-radius: 14px;
 
-          font-size:
-            13px;
+          font-size: 13px;
 
-          line-height:
-            1.55;
+          line-height: 1.55;
 
-          white-space:
-            pre-wrap;
+          white-space: pre-wrap;
 
-          overflow-wrap:
-            anywhere;
+          overflow-wrap: anywhere;
         }
 
 
         .bondstats-history-message-user {
-          margin-left:
-            auto;
+          margin-left: auto;
 
           background:
             rgba(104,255,153,.16);
@@ -597,8 +700,7 @@
 
 
         .bondstats-history-message-assistant {
-          margin-right:
-            auto;
+          margin-right: auto;
 
           background:
             rgba(0,0,0,.24);
@@ -610,38 +712,37 @@
 
 
         .bondstats-message-role {
-          margin-bottom:
-            6px;
+          margin-bottom: 6px;
 
-          color:
-            #7dffa4;
+          color: #7dffa4;
 
-          font-size:
-            9px;
+          font-size: 9px;
 
-          font-weight:
-            700;
+          font-weight: 700;
 
-          letter-spacing:
-            .09em;
+          letter-spacing: .09em;
 
-          text-transform:
-            uppercase;
+          text-transform: uppercase;
         }
 
 
-        .bondstats-conversation-footer {
-          flex:
-            0 0 auto;
+        /* ==========================================
+           FOOTER
+           ========================================== */
 
-          display:
-            flex;
+        .bondstats-conversation-footer {
+          flex: 0 0 auto;
+
+          display: flex;
+
+          align-items: center;
 
           justify-content:
             space-between;
 
-          gap:
-            10px;
+          flex-wrap: wrap;
+
+          gap: 8px;
 
           padding:
             14px 20px;
@@ -652,34 +753,23 @@
         }
 
 
-        #bondstats-delete-conversation {
-          padding:
-            9px 13px;
+        .bondstats-conversation-left-actions,
+        .bondstats-conversation-right-actions {
+          display: flex;
 
-          border-radius:
-            10px;
+          align-items: center;
 
-          border:
-            1px solid
-            rgba(255,110,110,.28);
-
-          background:
-            rgba(100,15,15,.15);
-
-          color:
-            #ffbcbc;
-
-          cursor:
-            pointer;
+          gap: 8px;
         }
 
 
-        #bondstats-close-conversation {
-          padding:
-            9px 14px;
+        .bondstats-history-action {
+          min-height: 38px;
 
-          border-radius:
-            10px;
+          padding:
+            0 13px;
+
+          border-radius: 10px;
 
           border:
             1px solid
@@ -688,40 +778,151 @@
           background:
             rgba(255,255,255,.04);
 
-          color:
-            #fff;
+          color: #fff;
 
-          cursor:
-            pointer;
+          cursor: pointer;
+
+          font-size: 12px;
         }
 
+
+        .bondstats-history-action:hover {
+          background:
+            rgba(255,255,255,.08);
+        }
+
+
+        #bondstats-continue-conversation {
+          border-color:
+            rgba(117,255,155,.45);
+
+          background:
+            rgba(63,190,102,.16);
+
+          color:
+            #caffd8;
+
+          font-weight: 700;
+        }
+
+
+        #bondstats-delete-conversation {
+          border-color:
+            rgba(255,110,110,.28);
+
+          background:
+            rgba(100,15,15,.15);
+
+          color:
+            #ffbcbc;
+        }
+
+
+        /* ==========================================
+           CONTINUE NOTICE
+           ========================================== */
+
+        #bondstats-history-resume-notice {
+          position: fixed;
+
+          left: 50%;
+
+          bottom: 24px;
+
+          z-index: 9999999;
+
+          transform:
+            translateX(-50%)
+            translateY(30px);
+
+          opacity: 0;
+
+          pointer-events: none;
+
+          padding:
+            11px 17px;
+
+          border-radius: 999px;
+
+          border:
+            1px solid
+            rgba(117,255,155,.35);
+
+          background:
+            rgba(5,27,16,.96);
+
+          color:
+            #dcffe6;
+
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+          font-size: 12px;
+
+          box-shadow:
+            0 15px 50px
+            rgba(0,0,0,.40);
+
+          transition:
+            opacity .20s ease,
+            transform .20s ease;
+        }
+
+
+        #bondstats-history-resume-notice.visible {
+          opacity: 1;
+
+          transform:
+            translateX(-50%)
+            translateY(0);
+        }
+
+
+        /* ==========================================
+           MOBILE
+           ========================================== */
 
         @media (max-width: 700px) {
 
           #bondstats-history-button {
-            min-height:
-              34px;
+            min-height: 34px;
 
             padding:
               0 11px;
 
-            font-size:
-              12px;
+            font-size: 12px;
           }
 
 
           #bondstats-conversation-viewer {
-            padding:
-              10px;
+            padding: 10px;
           }
 
 
           #bondstats-conversation-card {
-            max-height:
-              94vh;
+            max-height: 94vh;
+          }
+
+
+          .bondstats-conversation-footer {
+            align-items: stretch;
+          }
+
+
+          .bondstats-conversation-left-actions,
+          .bondstats-conversation-right-actions {
+            width: 100%;
+          }
+
+
+          .bondstats-history-action {
+            flex: 1;
           }
 
         }
+
       `;
 
 
@@ -732,7 +933,7 @@
 
 
     /* ========================================================
-       CREATE UI
+       CREATE HISTORY UI
        ======================================================== */
 
     function createHistoryUI() {
@@ -748,6 +949,10 @@
 
       injectStyles();
 
+
+      /* ------------------------------------------------------
+         HISTORY BUTTON
+         ------------------------------------------------------ */
 
       const historyButton =
         document.createElement(
@@ -767,66 +972,67 @@
         "History";
 
 
-      /*
-        Place beside Account / New Session.
-      */
+      /* ------------------------------------------------------
+         PLACE BESIDE ACCOUNT
+         ------------------------------------------------------ */
 
-      const accountButton =
-        document.getElementById(
-          "bondstats-account-trigger"
-        );
+      function mountHistoryButton() {
+
+        const accountButton =
+          document.getElementById(
+            "bondstats-account-trigger"
+          );
 
 
-      if (
-        accountButton &&
-        accountButton.parentElement
-      ) {
+        if (
+          accountButton &&
+          accountButton.parentElement
+        ) {
 
-        accountButton.parentElement.insertBefore(
-          historyButton,
-          accountButton
-        );
+          accountButton.parentElement.insertBefore(
+            historyButton,
+            accountButton
+          );
 
-      } else {
+          return true;
+        }
 
-        /*
-          Safe fallback:
-          append only after account UI exists.
-        */
+
+        return false;
+      }
+
+
+      if (!mountHistoryButton()) {
+
+        let attempts = 0;
 
         const timer =
           window.setInterval(
             () => {
 
-              const account =
-                document.getElementById(
-                  "bondstats-account-trigger"
-                );
+              attempts += 1;
 
 
               if (
-                account &&
-                account.parentElement
+                mountHistoryButton() ||
+                attempts > 40
               ) {
 
                 window.clearInterval(
                   timer
                 );
 
-
-                account.parentElement.insertBefore(
-                  historyButton,
-                  account
-                );
-
               }
 
             },
-            500
+            250
           );
-
       }
 
+
+      /* ------------------------------------------------------
+         DRAWER
+         ------------------------------------------------------ */
 
       const backdrop =
         document.createElement(
@@ -839,6 +1045,7 @@
 
 
       backdrop.innerHTML = `
+
         <aside
           id="bondstats-history-panel"
           aria-label="Chat history"
@@ -849,6 +1056,7 @@
           >
 
             <div>
+
               <h2
                 class="bondstats-history-heading"
               >
@@ -859,6 +1067,7 @@
                 class="bondstats-history-subtitle"
                 id="bondstats-history-user"
               ></p>
+
             </div>
 
 
@@ -875,6 +1084,7 @@
                 ↻
               </button>
 
+
               <button
                 class="bondstats-history-icon-button"
                 id="bondstats-history-close"
@@ -890,10 +1100,25 @@
 
 
           <div
+            class="bondstats-history-search-wrap"
+          >
+
+            <input
+              id="bondstats-history-search"
+              type="search"
+              placeholder="Search conversations…"
+              autocomplete="off"
+            />
+
+          </div>
+
+
+          <div
             id="bondstats-history-list"
           ></div>
 
         </aside>
+
       `;
 
 
@@ -901,6 +1126,10 @@
         backdrop
       );
 
+
+      /* ------------------------------------------------------
+         VIEWER
+         ------------------------------------------------------ */
 
       const viewer =
         document.createElement(
@@ -913,6 +1142,7 @@
 
 
       viewer.innerHTML = `
+
         <section
           id="bondstats-conversation-card"
         >
@@ -939,24 +1169,57 @@
             class="bondstats-conversation-footer"
           >
 
-            <button
-              id="bondstats-delete-conversation"
-              type="button"
+            <div
+              class="bondstats-conversation-left-actions"
             >
-              Delete
-            </button>
+
+              <button
+                id="bondstats-rename-conversation"
+                class="bondstats-history-action"
+                type="button"
+              >
+                Rename
+              </button>
 
 
-            <button
-              id="bondstats-close-conversation"
-              type="button"
+              <button
+                id="bondstats-delete-conversation"
+                class="bondstats-history-action"
+                type="button"
+              >
+                Delete
+              </button>
+
+            </div>
+
+
+            <div
+              class="bondstats-conversation-right-actions"
             >
-              Close
-            </button>
+
+              <button
+                id="bondstats-close-conversation"
+                class="bondstats-history-action"
+                type="button"
+              >
+                Close
+              </button>
+
+
+              <button
+                id="bondstats-continue-conversation"
+                class="bondstats-history-action"
+                type="button"
+              >
+                Open & Continue
+              </button>
+
+            </div>
 
           </div>
 
         </section>
+
       `;
 
 
@@ -964,6 +1227,33 @@
         viewer
       );
 
+
+      /* ------------------------------------------------------
+         RESUME NOTICE
+         ------------------------------------------------------ */
+
+      const resumeNotice =
+        document.createElement(
+          "div"
+        );
+
+
+      resumeNotice.id =
+        "bondstats-history-resume-notice";
+
+
+      resumeNotice.textContent =
+        "Conversation selected";
+
+
+      document.body.appendChild(
+        resumeNotice
+      );
+
+
+      /* ======================================================
+         EVENTS
+         ====================================================== */
 
       historyButton.addEventListener(
         "click",
@@ -1001,6 +1291,72 @@
         );
 
 
+      document
+        .getElementById(
+          "bondstats-delete-conversation"
+        )
+        ?.addEventListener(
+          "click",
+          () => {
+
+            if (activeConversationId) {
+
+              deleteConversation(
+                activeConversationId
+              );
+
+            }
+
+          }
+        );
+
+
+      document
+        .getElementById(
+          "bondstats-rename-conversation"
+        )
+        ?.addEventListener(
+          "click",
+          () => {
+
+            if (activeConversationId) {
+
+              renameConversation(
+                activeConversationId
+              );
+
+            }
+
+          }
+        );
+
+
+      document
+        .getElementById(
+          "bondstats-continue-conversation"
+        )
+        ?.addEventListener(
+          "click",
+          continueConversation
+        );
+
+
+      document
+        .getElementById(
+          "bondstats-history-search"
+        )
+        ?.addEventListener(
+          "input",
+          event => {
+
+            searchConversations(
+              event.target.value
+            );
+
+          }
+        );
+
+
       backdrop.addEventListener(
         "click",
         event => {
@@ -1031,6 +1387,7 @@
 
         }
       );
+
     }
 
 
@@ -1109,14 +1466,16 @@
       if (!currentUser) {
 
         closeHistory();
+
         closeConversation();
 
       }
+
     }
 
 
     /* ========================================================
-       HISTORY DRAWER
+       OPEN / CLOSE HISTORY
        ======================================================== */
 
     async function openHistory() {
@@ -1141,6 +1500,7 @@
 
 
       await loadConversations();
+
     }
 
 
@@ -1158,6 +1518,7 @@
           "none";
 
       }
+
     }
 
 
@@ -1184,11 +1545,13 @@
 
 
       list.innerHTML = `
+
         <div
           class="bondstats-history-empty"
         >
           Loading conversations…
         </div>
+
       `;
 
 
@@ -1212,11 +1575,10 @@
             .order(
               "updated_at",
               {
-                ascending:
-                  false
+                ascending: false
               }
             )
-            .limit(100);
+            .limit(150);
 
 
         if (error) {
@@ -1228,6 +1590,10 @@
           Array.isArray(data)
             ? data
             : [];
+
+
+        filteredConversations =
+          [...conversations];
 
 
         renderConversationList();
@@ -1242,19 +1608,63 @@
 
 
         list.innerHTML = `
+
           <div
             class="bondstats-history-empty"
           >
             History could not be loaded.
           </div>
+
         `;
 
       }
+
     }
 
 
     /* ========================================================
-       RENDER CONVERSATIONS
+       SEARCH
+       ======================================================== */
+
+    function searchConversations(
+      value
+    ) {
+
+      const query =
+        safeText(value)
+          .toLowerCase();
+
+
+      if (!query) {
+
+        filteredConversations =
+          [...conversations];
+
+      } else {
+
+        filteredConversations =
+          conversations.filter(
+            conversation => {
+
+              return safeText(
+                conversation.title
+              )
+                .toLowerCase()
+                .includes(query);
+
+            }
+          );
+
+      }
+
+
+      renderConversationList();
+
+    }
+
+
+    /* ========================================================
+       RENDER LIST
        ======================================================== */
 
     function renderConversationList() {
@@ -1271,16 +1681,17 @@
 
 
       if (
-        conversations.length === 0
+        filteredConversations.length === 0
       ) {
 
         list.innerHTML = `
+
           <div
             class="bondstats-history-empty"
           >
-            No saved conversations yet.<br>
-            Your new BondStats chats will appear here.
+            No conversations found.
           </div>
+
         `;
 
         return;
@@ -1288,40 +1699,57 @@
 
 
       list.innerHTML =
-        conversations
+        filteredConversations
           .map(
             conversation => `
-              <button
+
+              <div
                 class="bondstats-history-item"
-                type="button"
                 data-conversation-id="${escapeHTML(
                   conversation.id
                 )}"
               >
 
                 <div
-                  class="bondstats-history-title"
+                  class="bondstats-history-item-main"
                 >
-                  ${escapeHTML(
-                    safeText(
-                      conversation.title
-                    ) ||
-                    "Untitled conversation"
-                  )}
+
+                  <div
+                    class="bondstats-history-title"
+                  >
+                    ${escapeHTML(
+                      safeText(
+                        conversation.title
+                      ) ||
+                      "Untitled conversation"
+                    )}
+                  </div>
+
+
+                  <div
+                    class="bondstats-history-time"
+                  >
+                    ${escapeHTML(
+                      formatDate(
+                        conversation.updated_at ||
+                        conversation.created_at
+                      )
+                    )}
+                  </div>
+
                 </div>
 
-                <div
-                  class="bondstats-history-time"
-                >
-                  ${escapeHTML(
-                    formatDate(
-                      conversation.updated_at ||
-                      conversation.created_at
-                    )
-                  )}
-                </div>
 
-              </button>
+                <button
+                  class="bondstats-history-item-menu"
+                  type="button"
+                  title="Rename"
+                >
+                  •••
+                </button>
+
+              </div>
+
             `
           )
           .join("");
@@ -1332,29 +1760,58 @@
           ".bondstats-history-item"
         )
         .forEach(
-          button => {
+          item => {
 
-            button.addEventListener(
-              "click",
-              () => {
-
-                const id =
-                  button.dataset
-                    .conversationId;
+            const id =
+              item.dataset
+                .conversationId;
 
 
-                if (id) {
+            item
+              .querySelector(
+                ".bondstats-history-item-main"
+              )
+              ?.addEventListener(
+                "click",
+                () => {
 
-                  openConversation(
-                    id
-                  );
+                  if (id) {
+
+                    openConversation(
+                      id
+                    );
+
+                  }
 
                 }
-              }
-            );
+              );
+
+
+            item
+              .querySelector(
+                ".bondstats-history-item-menu"
+              )
+              ?.addEventListener(
+                "click",
+                event => {
+
+                  event.stopPropagation();
+
+
+                  if (id) {
+
+                    renameConversation(
+                      id
+                    );
+
+                  }
+
+                }
+              );
 
           }
         );
+
     }
 
 
@@ -1374,11 +1831,13 @@
       }
 
 
+      activeConversationId =
+        conversationId;
+
+
       const conversation =
-        conversations.find(
-          item =>
-            item.id ===
-            conversationId
+        getConversationById(
+          conversationId
         );
 
 
@@ -1420,11 +1879,13 @@
 
 
       messages.innerHTML = `
+
         <div
           class="bondstats-history-empty"
         >
           Loading messages…
         </div>
+
       `;
 
 
@@ -1456,8 +1917,7 @@
             .order(
               "created_at",
               {
-                ascending:
-                  true
+                ascending: true
               }
             );
 
@@ -1467,31 +1927,15 @@
         }
 
 
-        renderMessages(
+        activeConversationMessages =
           Array.isArray(data)
             ? data
-            : []
+            : [];
+
+
+        renderMessages(
+          activeConversationMessages
         );
-
-
-        const deleteButton =
-          document.getElementById(
-            "bondstats-delete-conversation"
-          );
-
-
-        if (deleteButton) {
-
-          deleteButton.onclick =
-            () => {
-
-              deleteConversation(
-                conversationId
-              );
-
-            };
-
-        }
 
 
       } catch (error) {
@@ -1503,14 +1947,17 @@
 
 
         messages.innerHTML = `
+
           <div
             class="bondstats-history-empty"
           >
             Messages could not be loaded.
           </div>
+
         `;
 
       }
+
     }
 
 
@@ -1538,11 +1985,13 @@
       ) {
 
         container.innerHTML = `
+
           <div
             class="bondstats-history-empty"
           >
             No messages stored for this conversation.
           </div>
+
         `;
 
         return;
@@ -1568,6 +2017,7 @@
 
 
               return `
+
                 <article
                   class="
                     bondstats-history-message
@@ -1581,6 +2031,7 @@
                     ${roleLabel}
                   </div>
 
+
                   ${escapeHTML(
                     safeText(
                       message.content
@@ -1588,7 +2039,9 @@
                   )}
 
                 </article>
+
               `;
+
             }
           )
           .join("");
@@ -1596,11 +2049,138 @@
 
       container.scrollTop =
         container.scrollHeight;
+
     }
 
 
     /* ========================================================
-       DELETE CONVERSATION
+       RENAME
+       ======================================================== */
+
+    async function renameConversation(
+      conversationId
+    ) {
+
+      if (
+        !currentUser ||
+        !conversationId
+      ) {
+        return;
+      }
+
+
+      const conversation =
+        getConversationById(
+          conversationId
+        );
+
+
+      if (!conversation) {
+        return;
+      }
+
+
+      const requestedTitle =
+        window.prompt(
+          "Rename conversation:",
+          conversation.title ||
+          ""
+        );
+
+
+      if (
+        requestedTitle === null
+      ) {
+        return;
+      }
+
+
+      const newTitle =
+        safeText(
+          requestedTitle
+        );
+
+
+      if (!newTitle) {
+        return;
+      }
+
+
+      try {
+
+        const {
+          error
+        } =
+          await db
+            .from(
+              "conversations"
+            )
+            .update({
+              title:
+                newTitle
+            })
+            .eq(
+              "id",
+              conversationId
+            )
+            .eq(
+              "user_id",
+              currentUser.id
+            );
+
+
+        if (error) {
+          throw error;
+        }
+
+
+        conversation.title =
+          newTitle;
+
+
+        renderConversationList();
+
+
+        if (
+          activeConversationId ===
+          conversationId
+        ) {
+
+          const title =
+            document.getElementById(
+              "bondstats-conversation-title"
+            );
+
+
+          if (title) {
+
+            title.textContent =
+              newTitle;
+
+          }
+
+        }
+
+
+      } catch (error) {
+
+        console.error(
+          "[BondStats History] Rename:",
+          error
+        );
+
+
+        window.alert(
+          "The conversation could not be renamed."
+        );
+
+      }
+
+    }
+
+
+    /* ========================================================
+       DELETE
        ======================================================== */
 
     async function deleteConversation(
@@ -1628,14 +2208,9 @@
 
       try {
 
-        /*
-          Delete messages first.
-          This also works if no ON DELETE CASCADE
-          was configured.
-        */
-
         const {
-          error: messageError
+          error:
+            messageError
         } =
           await db
             .from(
@@ -1683,10 +2258,34 @@
         }
 
 
+        conversations =
+          conversations.filter(
+            conversation =>
+              conversation.id !==
+              conversationId
+          );
+
+
+        filteredConversations =
+          filteredConversations.filter(
+            conversation =>
+              conversation.id !==
+              conversationId
+          );
+
+
+        activeConversationId =
+          null;
+
+
+        activeConversationMessages =
+          [];
+
+
         closeConversation();
 
 
-        await loadConversations();
+        renderConversationList();
 
 
       } catch (error) {
@@ -1702,11 +2301,228 @@
         );
 
       }
+
     }
 
 
     /* ========================================================
-       CLOSE CONVERSATION
+       OPEN & CONTINUE
+       ======================================================== */
+
+    async function continueConversation() {
+
+      if (
+        !currentUser ||
+        !activeConversationId
+      ) {
+        return;
+      }
+
+
+      const conversation =
+        getConversationById(
+          activeConversationId
+        );
+
+
+      if (!conversation) {
+        return;
+      }
+
+
+      try {
+
+        /*
+          Move this conversation to the top.
+
+          account.js loads the newest conversation
+          after a fresh page load, so this makes the
+          chosen conversation become the active one.
+        */
+
+        const now =
+          new Date()
+            .toISOString();
+
+
+        const {
+          error
+        } =
+          await db
+            .from(
+              "conversations"
+            )
+            .update({
+              updated_at:
+                now
+            })
+            .eq(
+              "id",
+              activeConversationId
+            )
+            .eq(
+              "user_id",
+              currentUser.id
+            );
+
+
+        if (error) {
+          throw error;
+        }
+
+
+        /*
+          Remember selected conversation.
+
+          This allows us to build a deeper context
+          bridge later without changing the database.
+        */
+
+        localStorage.setItem(
+          "bondstats_selected_conversation",
+          activeConversationId
+        );
+
+
+        localStorage.setItem(
+          "bondstats_selected_conversation_title",
+          conversation.title ||
+          "Conversation"
+        );
+
+
+        showResumeNotice(
+          `Continuing: ${
+            conversation.title ||
+            "Conversation"
+          }`
+        );
+
+
+        closeConversation();
+
+        closeHistory();
+
+
+        /*
+          IMPORTANT:
+          Reload safely.
+
+          The account layer will now resolve this
+          conversation as the latest conversation.
+        */
+
+        window.setTimeout(
+          () => {
+
+            window.location.reload();
+
+          },
+          650
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          "[BondStats History] Continue:",
+          error
+        );
+
+
+        window.alert(
+          "The conversation could not be continued."
+        );
+
+      }
+
+    }
+
+
+    /* ========================================================
+       RESUME NOTICE
+       ======================================================== */
+
+    function showResumeNotice(
+      message
+    ) {
+
+      const notice =
+        document.getElementById(
+          "bondstats-history-resume-notice"
+        );
+
+
+      if (!notice) {
+        return;
+      }
+
+
+      notice.textContent =
+        message;
+
+
+      notice.classList.add(
+        "visible"
+      );
+
+
+      window.setTimeout(
+        () => {
+
+          notice.classList.remove(
+            "visible"
+          );
+
+        },
+        2600
+      );
+
+    }
+
+
+    /* ========================================================
+       RESTORE NOTICE AFTER RELOAD
+       ======================================================== */
+
+    function restoreResumeNotice() {
+
+      const conversationId =
+        localStorage.getItem(
+          "bondstats_selected_conversation"
+        );
+
+
+      const title =
+        localStorage.getItem(
+          "bondstats_selected_conversation_title"
+        );
+
+
+      if (!conversationId) {
+        return;
+      }
+
+
+      window.setTimeout(
+        () => {
+
+          showResumeNotice(
+            `Continuing: ${
+              title ||
+              "Conversation"
+            }`
+          );
+
+        },
+        600
+      );
+
+    }
+
+
+    /* ========================================================
+       CLOSE VIEWER
        ======================================================== */
 
     function closeConversation() {
@@ -1723,6 +2539,15 @@
           "none";
 
       }
+
+
+      activeConversationId =
+        null;
+
+
+      activeConversationMessages =
+        [];
+
     }
 
 
@@ -1768,6 +2593,19 @@
 
             conversations = [];
 
+            filteredConversations = [];
+
+            activeConversationId =
+              null;
+
+            localStorage.removeItem(
+              "bondstats_selected_conversation"
+            );
+
+            localStorage.removeItem(
+              "bondstats_selected_conversation_title"
+            );
+
           }
 
 
@@ -1779,6 +2617,7 @@
           );
 
         }
+
       }
     );
 
@@ -1797,8 +2636,11 @@
         await loadUser();
 
 
+        restoreResumeNotice();
+
+
         console.log(
-          "[BondStats History] Ready."
+          "[BondStats History] Version 2 ready."
         );
 
 
@@ -1810,6 +2652,7 @@
         );
 
       }
+
     }
 
 
@@ -1836,7 +2679,7 @@
   } catch (fatalError) {
 
     console.error(
-      "[BondStats History] Isolated fatal error:",
+      "[BondStats History] Fatal isolated error:",
       fatalError
     );
 
