@@ -58,18 +58,14 @@
        SUPABASE CLIENT
        ======================================================== */
 
-    const db =
-      window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY,
-        {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-          }
-        }
-      );
+    const db = window.BondStatsSupabase;
+
+if (!db) {
+  console.error(
+    "[BondStats History] Shared Supabase client unavailable."
+  );
+  return;
+}
 
 
     /* ========================================================
