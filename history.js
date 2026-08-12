@@ -46,7 +46,7 @@
        FAIL SAFE
        ======================================================== */
 
-    if (!window.supabase?.createClient) {
+    !window.supabase?.createClient) {
       console.warn(
         "[BondStats History] Supabase library unavailable."
       );
@@ -60,7 +60,7 @@
 
     const db = window.BondStatsSupabase;
 
-if (!db) {
+!db) {
   console.error(
     "[BondStats History] Shared Supabase client unavailable."
   );
@@ -2657,14 +2657,6 @@ if (!db) {
       ) {
         return;
       }
-       
-if (
-  window.BondStatsSetConversationHistory
-) {
-  window.BondStatsSetConversationHistory(
-    messages
-  );
-}
 
       if (title) {
 
@@ -2728,7 +2720,14 @@ if (
                 ascending: true
               }
             );
-
+if (
+  !error &&
+  window.BondStatsSetConversationHistory
+) {
+  window.BondStatsSetConversationHistory(
+    data || []
+  );
+}
 
         if (error) {
           throw error;
