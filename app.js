@@ -1806,10 +1806,10 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
           },
 
           body: JSON.stringify({
-  message,
-  conversation_id:
-    window.BondStatsCurrentConversationId || null
-})
+            message,
+            history:
+              conversationHistory
+          }),
 
           signal:
             activeController.signal
