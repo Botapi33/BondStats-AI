@@ -1375,7 +1375,7 @@ if (!db) {
 
 
     /* ========================================================
-       OPEN ACTION MODAL
+        ACTION MODAL
        ======================================================== */
 
     function openActionModal({
@@ -2657,7 +2657,14 @@ if (!db) {
       ) {
         return;
       }
-
+       
+if (
+  window.BondStatsSetConversationHistory
+) {
+  window.BondStatsSetConversationHistory(
+    messages
+  );
+}
 
       if (title) {
 
