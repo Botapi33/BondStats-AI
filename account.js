@@ -1404,6 +1404,55 @@
       }
     );
 
+     /* =========================================================
+   PASSWORD RESET
+   ========================================================= */
+
+async function sendPasswordReset(email) {
+  try {
+    const cleanEmail =
+      String(email || "").trim();
+
+    if (!cleanEmail) {
+      setAccountStatus(
+        "Enter your email address first."
+      );
+      return;
+    }
+
+    setAccountStatus(
+      "Sending password reset email…"
+    );
+
+    const { error } =
+      await db.auth.resetPasswordForEmail(
+        cleanEmail,
+        {
+          redirectTo:
+            DIRECT_APP_URL
+        }
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    setAccountStatus(
+      "Password reset email sent. Check your inbox."
+    );
+  } catch (error) {
+    console.error(
+      "[BondStats Account] Password reset failed:",
+      error
+    );
+
+    setAccountStatus(
+      error?.message ||
+      "Password reset failed."
+    );
+  }
+}
+
 
     /* ========================================================
        GOOGLE AUTH
