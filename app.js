@@ -289,6 +289,25 @@ document.addEventListener("DOMContentLoaded", () => {
       content: cleaned.slice(0, 2500)
     });
 
+    window.BondStatsSetConversationHistory = function (messages) {
+  conversationHistory =
+    Array.isArray(messages)
+      ? messages
+          .filter(
+            (m) =>
+              m &&
+              (m.role === "user" ||
+                m.role === "assistant") &&
+              typeof m.content === "string"
+          )
+          .map((m) => ({
+            role: m.role,
+            content: m.content.slice(0, 2500)
+          }))
+          .slice(-6)
+      : [];
+};
+
     /*
      * Keep only the most recent messages
      * to avoid sending an oversized history.
