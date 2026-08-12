@@ -2720,15 +2720,11 @@
                 ascending: true
               }
             );
-if (
-  !error &&
-  window.BondStatsSetConversationHistory
-) {
-  window.BondStatsSetConversationHistory(
-    data || []
-  );
-}
 
+         if (!error && Array.isArray(data)) {
+  window.BondStatsPendingConversationHistory = data;
+}
+         
         if (error) {
           throw error;
         }
