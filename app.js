@@ -1788,28 +1788,6 @@ ${/\bif\b/i.test(answer) && /\b(basis points|bps|nario|stress test)\b/i.test(ans
   ======================================================= */
 
   async function askBondStatsAI(message) {
-    if (
-  Array.isArray(
-    window.BondStatsPendingConversationHistory
-  )
-) {
-  conversationHistory =
-    window.BondStatsPendingConversationHistory
-      .filter(
-        (m) =>
-          m &&
-          (m.role === "user" ||
-            m.role === "assistant") &&
-          typeof m.content === "string"
-      )
-      .map((m) => ({
-        role: m.role,
-        content: m.content.slice(0, 2500)
-      }))
-      .slice(-6);
-
-  window.BondStatsPendingConversationHistory = null;
-}
     /*
      * Cancel any old request before starting a new one.
      */
