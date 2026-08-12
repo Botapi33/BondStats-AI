@@ -120,7 +120,7 @@
        ======================================================== */
 
     function safeText(value) {
-      return typeof value === "string"
+      return of value === "string"
         ? value.trim()
         : "";
     }
@@ -802,7 +802,7 @@
 
           <button
             id="bondstats-account-close"
-            type="button"
+            ="button"
           >
             ×
           </button>
@@ -829,7 +829,7 @@
 
             <button
               id="bondstats-google-login"
-              type="button"
+              ="button"
             >
               ${googleLogo()}
 
@@ -849,7 +849,7 @@
             <input
               id="bondstats-account-email"
               class="bondstats-account-input"
-              type="email"
+              ="email"
               placeholder="Email"
               autocomplete="email"
             />
@@ -863,6 +863,12 @@
               autocomplete="current-password"
             />
 
+<button
+  id="bondstats-forgot-password"
+  type="button"
+>
+  Forgot password?
+</button>
 
             <button
               id="bondstats-email-login"
@@ -972,7 +978,24 @@
           "click",
           emailSignIn
         );
+       
+document
+  .getElementById(
+    "bondstats-forgot-password"
+  )
+  ?.addEventListener(
+    "click",
+    () => {
+      const emailInput =
+        document.getElementById(
+          "bondstats-account-email"
+        );
 
+      sendPasswordReset(
+        emailInput?.value
+      );
+    }
+  );
 
       document
         .getElementById(
