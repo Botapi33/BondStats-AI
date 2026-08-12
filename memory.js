@@ -26,9 +26,8 @@
        * Supabase client instead of changing auth/history.
        */
       const db =
-        window.BondStatsDB ||
-        window.db ||
-        null;
+  window.BondStatsSupabase ||
+  null;
 
       if (!db) {
         console.warn(
